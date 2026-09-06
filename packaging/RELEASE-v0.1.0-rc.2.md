@@ -14,7 +14,7 @@
 
 验证：前端、桌面 release 和 NSIS 构建成功；最终主程序 PE Subsystem 为 2（Windows GUI）；固定内核文件、分发文件校验及 23 项源码指纹通过。未执行安装、窗口启动、真实模型或功能测试，实际体验仍需用户手动验收。
 
-本包未签名，仍是非常初始的预发布版；长期记忆迁移、多代理完整流程和全部沙箱安全边界等既有限制没有在本次修复中解决。详见 README。旧 rc.1 保留供追溯。
+本包未签名，仍是非常初始的预发布版；长期记忆迁移、多代理完整流程和全部沙箱安全边界等既有限制没有在本次修复中解决。详见 README。旧 rc.1 安装包及校验文件已撤下，统一使用本页 rc.2 新包。
 
 ## English
 
@@ -30,7 +30,7 @@ Requires Windows 10/11 x64 and preinstalled Microsoft Edge WebView2. No compilat
 
 Verification: frontend, desktop release and NSIS builds succeeded; the final desktop executable has PE Subsystem 2 (Windows GUI); fixed-kernel checksums, distribution checksums and 23 source fingerprints passed. Installation, window startup, real-model and functional testing were not performed; manual acceptance is still required.
 
-This remains an unsigned, very early prerelease. Existing limitations, including unfinished automatic memory migration, full multi-agent acceptance and complete sandbox-boundary acceptance, are unchanged. See the README. The previous rc.1 release remains available for traceability.
+This remains an unsigned, very early prerelease. Existing limitations, including unfinished automatic memory migration, full multi-agent acceptance and complete sandbox-boundary acceptance, are unchanged. See the README. The old rc.1 installer and checksum have been removed; use the rc.2 package on this page.
 
 ## SHA256
 

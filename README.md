@@ -2,7 +2,7 @@
 
 **A local-first, open-source AI coding agent for Windows, built around a pinned Codex execution kernel.**
 
-[简体中文](README.zh-CN.md) · English · [Download for Windows](https://github.com/suibianlou233/simple-codex/releases) · [Report an issue](https://github.com/suibianlou233/simple-codex/issues)
+[简体中文](README.zh-CN.md) · English · [Download for Windows](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.0-rc.2/Simple-0.1.0-rc.20260906-windows-x64-234042.zip) · [Report an issue](https://github.com/suibianlou233/simple-codex/issues)
 
 Thank you to OpenAI for open-sourcing Codex. Its source code makes it possible for me to learn from its architecture and continue building Simple Codex on that foundation.
 
@@ -12,7 +12,7 @@ Simple Codex brings a desktop interface, a local control layer, and model API ad
 
 ## Download and get started
 
-1. Open [Releases](https://github.com/suibianlou233/simple-codex/releases) and download the Windows x64 ZIP under **Assets**, not GitHub's automatically generated source-code archive.
+1. Download [the rc.2 Windows installer ZIP](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.0-rc.2/Simple-0.1.0-rc.20260906-windows-x64-234042.zip). Do not download GitHub's automatically generated source-code archive.
 2. Extract the ZIP and run the setup program. Windows 10/11 x64 and Microsoft Edge WebView2 Evergreen Runtime are required. The installer does not download WebView2 automatically.
 3. Open Simple. The first-run guide takes you to model settings. Enter your endpoint, model name, and API Key, then save.
 4. Choose **Open project** and select a local folder. Start with a small, read-only task and an approval-based permission level.
