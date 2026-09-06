@@ -1,0 +1,78 @@
+[package]
+name = "simple-windows-sandbox"
+version.workspace = true
+edition.workspace = true
+license = "Apache-2.0"
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "simple_windows_sandbox"
+path = "src/lib.rs"
+doctest = false
+
+[[bin]]
+name = "simple-windows-sandbox-setup"
+path = "src/bin/setup_main.rs"
+
+[[bin]]
+name = "simple-command-runner"
+path = "src/bin/command_runner.rs"
+
+[dependencies]
+anyhow.workspace = true
+base64 = "0.22"
+chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
+dunce = "1.0"
+glob = "0.3"
+rand = { version = "0.8", default-features = false, features = ["std", "small_rng"] }
+serde.workspace = true
+serde_json.workspace = true
+tempfile = "3"
+tokio = { workspace = true, features = ["sync", "rt"] }
+windows = { version = "0.58", features = [
+  "Win32_Foundation",
+  "Win32_NetworkManagement_WindowsFirewall",
+  "Win32_System_Com",
+  "Win32_System_Variant",
+] }
+
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.52"
+features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_NetworkManagement_NetManagement",
+  "Win32_NetworkManagement_WindowsFilteringPlatform",
+  "Win32_Networking_WinSock",
+  "Win32_Security",
+  "Win32_Security_Authentication_Identity",
+  "Win32_Security_Authorization",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Console",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Environment",
+  "Win32_System_IO",
+  "Win32_System_JobObjects",
+  "Win32_System_Kernel",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_System_Pipes",
+  "Win32_System_Registry",
+  "Win32_System_Rpc",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_SystemServices",
+  "Win32_System_Threading",
+  "Win32_System_WindowsProgramming",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+]
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+
+[lints.rust]
+unsafe_code = "allow"

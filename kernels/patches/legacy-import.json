@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "upstream_revision": "2b7c279735d0d096cf7b34fe98938f46792f4d4f",
+  "status": "historical-inventory-not-replayable-patch-series",
+  "source_binary_correspondence": "not-proven-by-import",
+  "authoritative_record": "MODIFICATIONS.md",
+  "groups": [
+    {
+      "id": "legacy-product-surface",
+      "reason": "Historical physical removal of account, cloud and hosted product entry points.",
+      "areas": ["app-server", "app-server-protocol", "core", "Cargo.toml", "CLI/TUI/cloud crates"],
+      "evidence": "SIMPLE_SLIM.md Batch 1-9 and release invariants",
+      "migration": "Replace physical removal with reviewed upstream configuration and observed network policy where possible. Do not claim configuration equals removal.",
+      "verification": "Old surface gate applies to legacy only. Upstream adapter requires separate behavior/network acceptance."
+    },
+    {
+      "id": "legacy-gateway-contract",
+      "reason": "Mandatory authenticated loopback provider and explicit model/tool capabilities.",
+      "areas": ["app-server", "model-provider-info", "models-manager", "core", "arg0"],
+      "evidence": "SIMPLE_SLIM.md Batch 3-4 and Simple execution hardening; DEBUG-013/020",
+      "migration": "Use supported upstream provider configuration in a new adapter; keep real credentials in Simple.",
+      "verification": "Handshake, tool registration, errors, cancellation, command environment credential isolation."
+    },
+    {
+      "id": "legacy-project-memory",
+      "reason": "Project-scoped memory independent of history storage; reset, source exclusion and disabled-read semantics.",
+      "areas": ["state/runtime", "thread-store", "memories/write", "core/src/session", "app-server ConfigManager", "config/schema"],
+      "evidence": "SIMPLE_SLIM.md project memory sections; DEBUG-018/019/022/023/026/028/029",
+      "migration": "Not transparently portable through official APIs. Retain legacy profile until replacement semantics and data migration are accepted.",
+      "verification": "Cross-project isolation, reset concurrency, fork provenance, memory/forget, restart and live memory mode."
+    },
+    {
+      "id": "legacy-verified-patch",
+      "reason": "Reject stale approvals and competing same-process writes at native write boundary.",
+      "areas": ["apply-patch/src/lib.rs", "apply-patch/src/invocation.rs", "apply-patch/src/verified.rs", "core/src/tools/runtimes/apply_patch.rs"],
+      "evidence": "SIMPLE_SLIM.md verified patch conflict guard; DEBUG-045; ADR-20260905-VERIFIED-PATCH-CONFLICTS.md",
+      "migration": "Keep as explicit candidate patch where upstream lacks equivalent behavior; cannot promise equivalence from outer snapshots.",
+      "verification": "Native stale approval and same-process conflict cases. Historical record says acceptance incomplete; importing does not certify success."
+    }
+  ],
+  "future_patch_required_fields": ["id", "upstream_revision", "reason", "files", "patch_sha256", "apply_order", "tests", "test_results", "upstream_issue_or_commit", "removal_condition"]
+}

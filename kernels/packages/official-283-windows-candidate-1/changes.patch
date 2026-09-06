@@ -1,0 +1,18 @@
+diff --git a/codex-rs/code-mode-runtime/Cargo.toml b/codex-rs/code-mode-runtime/Cargo.toml
+index e3708b657ebd5e05a289acffea1dccb2061db4fd..edfcabe8c6cdac8671bbd81eebb0c4098ba1f756 100644
+--- a/codex-rs/code-mode-runtime/Cargo.toml
++++ b/codex-rs/code-mode-runtime/Cargo.toml
+@@ -21,6 +21,13 @@ serde_json = { workspace = true }
+ tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+ tokio-util = { workspace = true, features = ["rt"] }
+ tracing = { workspace = true }
++
++# Simple Windows build patch: rusty_v8 150.4.0 has no published Windows
++# ptrcomp_sandbox archive. This does not configure the OS command sandbox.
++[target.'cfg(windows)'.dependencies]
++v8 = { workspace = true }
++
++[target.'cfg(not(windows))'.dependencies]
+ v8 = { workspace = true, features = ["v8_enable_sandbox"] }
+ 
+ [dev-dependencies]

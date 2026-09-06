@@ -1,0 +1,43 @@
+[package]
+name = "local-agent-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "local_agent_desktop"
+crate-type = ["lib"]
+
+[features]
+bundled-official-kernel = []
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+dirs = "=6.0.0"
+futures-util.workspace = true
+keyring = "4.2.0"
+local-agent-core = { path = "../../../crates/core" }
+local-agent-context = { path = "../../../crates/context" }
+local-agent-model = { path = "../../../crates/model" }
+local-agent-sandbox = { path = "../../../crates/sandbox" }
+local-agent-storage = { path = "../../../crates/storage" }
+local-agent-tools = { path = "../../../crates/tools" }
+rfd = "0.17.2"
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.11.5", features = [] }
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+axum.workspace = true
+tempfile = "3.27"
+
+[lints]
+workspace = true

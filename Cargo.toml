@@ -1,0 +1,44 @@
+[workspace]
+members = [
+  "apps/desktop/src-tauri",
+  "crates/core",
+  "crates/context",
+  "crates/model",
+  "crates/sandbox",
+  "crates/simple-sandbox-windows",
+  "crates/storage",
+  "crates/tools",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.98"
+
+[workspace.dependencies]
+anyhow = "1.0"
+async-trait = "0.1.89"
+axum = "0.8.8"
+eventsource-stream = "0.2.3"
+futures-util = "0.3.34"
+ignore = "0.4.23"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls", "stream"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10.9"
+similar = "2.7.0"
+thiserror = "2.0"
+tokio = { version = "1.53.1", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio-util = "0.7.19"
+tracing = "0.1"
+uuid = { version = "1.18", features = ["serde", "v4"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unwrap_used = "deny"

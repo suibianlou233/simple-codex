@@ -1,0 +1,27 @@
+{
+  "bundle": {
+    "licenseFile": "../../../LICENSE",
+    "resources": {
+      "../../../target/release-licenses/DEPENDENCY_LICENSES.md": "DEPENDENCY_LICENSES.md",
+      "../../../target/release-licenses/dependency-inventory.json": "dependency-inventory.json",
+      "../../../kernels/packages/official-283-windows-candidate-1/apply_patch.exe": "kernels/official-283-windows-candidate-1/apply_patch.exe",
+      "../../../kernels/packages/official-283-windows-candidate-1/codex-app-server.exe": "kernels/official-283-windows-candidate-1/codex-app-server.exe",
+      "../../../kernels/packages/official-283-windows-candidate-1/codex-code-mode-host.exe": "kernels/official-283-windows-candidate-1/codex-code-mode-host.exe",
+      "../../../kernels/packages/official-283-windows-candidate-1/kernel.json": "kernels/official-283-windows-candidate-1/kernel.json",
+      "../../../kernels/packages/official-283-windows-candidate-1/changes.patch": "kernels/official-283-windows-candidate-1/changes.patch",
+      "../../../kernels/packages/official-283-windows-candidate-1/LICENSE": "kernels/official-283-windows-candidate-1/LICENSE",
+      "../../../kernels/packages/official-283-windows-candidate-1/MODIFICATIONS.md": "kernels/official-283-windows-candidate-1/MODIFICATIONS.md",
+      "../../../kernels/packages/official-283-windows-candidate-1/NOTICE": "kernels/official-283-windows-candidate-1/NOTICE",
+      "../../../kernels/packages/official-283-windows-candidate-1/PATCHES.json": "kernels/official-283-windows-candidate-1/PATCHES.json",
+      "resources/simple-resources/simple-command-runner.exe": "simple-resources/simple-command-runner.exe",
+      "resources/simple-resources/simple-windows-sandbox-setup.exe": "simple-resources/simple-windows-sandbox-setup.exe",
+      "../../../LICENSE": "LICENSE",
+      "../../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "skip"
+      }
+    }
+  }
+}

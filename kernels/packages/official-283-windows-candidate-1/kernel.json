@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "id": "official-283-windows-candidate-1",
+  "upstream_revision": "28327355b861ab6cc76b01c7248663eb1be440cf",
+  "adapter": "official-283-candidate-v1",
+  "data_contract": "simple-upstream-283-isolated-v1",
+  "target": "x86_64-pc-windows-msvc",
+  "provenance": "pinned-upstream-with-recorded-patches",
+  "capabilities": [
+    "stdio-thread-turn",
+    "approval-interrupt",
+    "paginated-history",
+    "code-mode",
+    "official-provider-config",
+    "strict-config",
+    "isolated-candidate-only"
+  ],
+  "files": {
+    "apply_patch.exe": "64e094fac04568c38e8a0f9717990b8b699e57e772231afb0ca0e244df6b2edd",
+    "changes.patch": "71131dcc99efa9b7509a6525a65db0d6ddd580b5dedb28465db232fd89a4f50c",
+    "codex-app-server.exe": "d823350101677acb98421a92615b601c1533612fbacab2cd161eac6251da8610",
+    "codex-code-mode-host.exe": "57bfd3e4220da5b1b76195875c297271f927411c9f732160cce0defda052e479",
+    "LICENSE": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+    "MODIFICATIONS.md": "5d5b1fe20e2628bc7131ee42d2e0490d107d8594d7a24081de01b2e2861fe89b",
+    "NOTICE": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915",
+    "PATCHES.json": "3c7fa3efe7f54de71989e2e4804d6875e7e2ca288a04434baeaa179cc2cb3fce"
+  }
+}

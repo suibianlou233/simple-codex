@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "upstream-283-windows-v8",
+  "upstream_revision": "28327355b861ab6cc76b01c7248663eb1be440cf",
+  "reason": "Windows rusty_v8 sandbox prebuilt archive returns HTTP 404; build ordinary Windows archive. Disables V8 internal sandbox, not OS sandbox. Candidate only.",
+  "files": [
+    "codex-rs/code-mode-runtime/Cargo.toml"
+  ],
+  "apply_order": 1,
+  "patch_sha256": "71131dcc99efa9b7509a6525a65db0d6ddd580b5dedb28465db232fd89a4f50c",
+  "tests": [
+    "just test -p codex-code-mode-runtime",
+    "Simple packaged backend acceptance"
+  ],
+  "test_results": "not-run-by-exporter",
+  "upstream_issue_or_commit": "",
+  "removal_condition": "Upstream publishes compatible Windows sandbox archive or verified same-feature source build is adopted"
+}

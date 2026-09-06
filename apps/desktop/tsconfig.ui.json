@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": { "types": ["node"], "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.ui.tsbuildinfo" },
+  "include": ["src", "tests/ui", "playwright.config.ts", "vitest.config.ts"]
+}

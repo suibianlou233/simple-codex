@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "id": "upstream-283-windows-v8",
+  "upstream_revision": "28327355b861ab6cc76b01c7248663eb1be440cf",
+  "reason": "Windows rusty_v8 sandbox prebuilt archive returns HTTP 404; build ordinary Windows archive. Disables V8 internal sandbox, not OS sandbox. Candidate only.",
+  "files": [
+    "codex-rs/code-mode-runtime/Cargo.toml"
+  ],
+  "apply_order": 1,
+  "patch_sha256": "71131dcc99efa9b7509a6525a65db0d6ddd580b5dedb28465db232fd89a4f50c",
+  "tests": [
+    "just test -p codex-code-mode-runtime",
+    "Simple packaged backend acceptance"
+  ],
+  "test_results": {
+    "date": "2026-09-06",
+    "windows_cargo_build": "passed: Rust 1.98.0, --locked --profile dev-small -j 1; three binaries",
+    "patch_replay": "passed: git apply --check on pristine base; reverse --check on patched checkout",
+    "runtime_tests": "68 passed, 1 failed: runtime::tests::linked_v8_has_sandbox_enabled. Expected protection difference; test not weakened or skipped.",
+    "simple_backend": "6 passed checks including two-slot switching; 2 legacy semantics checks failed (compound command exit status, native Windows patch alias). See kernels/acceptance/official-283-windows-candidate-1.md",
+    "upstream_format": "not passed: just fmt Bazel/Starlark section lacks dotslash; Rust formatter ran",
+    "bazel_lock": "not passed: bazel executable unavailable; Cargo-only candidate, not a Bazel-qualified release"
+  },
+  "upstream_issue_or_commit": "",
+  "removal_condition": "Upstream publishes compatible Windows sandbox archive or verified same-feature source build is adopted"
+}
