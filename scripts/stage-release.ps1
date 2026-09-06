@@ -33,6 +33,7 @@ $sourceFiles = @(
     'apps/desktop/src-tauri/src/kernel_desktop.rs', 'apps/desktop/src/items/TaskTimeline.tsx',
     'apps/desktop/src-tauri/src/legacy_execution.rs',
     'apps/desktop/src-tauri/src/lib.rs',
+    'apps/desktop/src-tauri/src/main.rs',
     'apps/desktop/src/app/WorkbenchApp.tsx',
     'apps/desktop/src/app/onboarding.ts',
     'apps/desktop/src/components/FirstRunGuide.tsx',

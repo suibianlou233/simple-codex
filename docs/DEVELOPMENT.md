@@ -25,7 +25,7 @@ This first source publication excludes machine-local handoff notes, private deve
 
 ## Use the matching packaged kernel / 使用随包内核
 
-1. Download and install the matching [Windows prerelease](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.0-rc.1).
+1. Download and install the matching [Windows prerelease](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.0-rc.2).
 2. In the installed Simple directory, locate `kernels/official-283-windows-candidate-1`. Copy only `apply_patch.exe`, `codex-app-server.exe` and `codex-code-mode-host.exe` into the source checkout's `kernels/packages/official-283-windows-candidate-1` directory. Keep the checked-in manifest and notices. **Do not copy user data or credentials.**
 3. Build Simple's own helpers and install frontend dependencies from the repository root:
 
@@ -91,4 +91,3 @@ Pop-Location
 ```
 
 UI checks use local fixtures, not real model credentials. Some integration tests need a separately configured kernel and are ignored by default. The existing memory-panel capability-loading case is a known failure; see the README limitations. A successful build is not complete functional or security acceptance.
-
