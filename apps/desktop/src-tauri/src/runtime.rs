@@ -39,7 +39,7 @@ use local_agent_tools::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use thiserror::Error;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio_util::sync::CancellationToken;
@@ -67,6 +67,12 @@ pub(crate) mod kernel_desktop;
 mod memory_control;
 #[path = "memory_notes.rs"]
 pub(crate) mod memory_notes;
+#[path = "image_attachments.rs"]
+pub(crate) mod image_attachments;
+#[path = "interactive_terminal.rs"]
+pub(crate) mod interactive_terminal;
+#[path = "browser.rs"]
+pub(crate) mod browser;
 #[path = "memory_view.rs"]
 mod memory_view;
 #[path = "project_execution.rs"]
@@ -2046,6 +2052,7 @@ impl DesktopRuntime {
         let project_root = project.root.clone();
         let profile = selected_model_profile(&self.storage, input.profile_id.as_deref())?;
         let gateway = gateway_for_profile(&profile, &*self.secret_store)?;
+        image_attachments::input(&self.database_path, &project_root, content, gateway.supports_images())?;
 
         let mut staged_core = self.core.clone();
         let created_event = staged_core.decide(AppCommand::CreateTask {
@@ -2208,6 +2215,7 @@ impl DesktopRuntime {
             .ok_or_else(|| DesktopError::ModelProfileNotFound(model_profile_id.clone()))?;
         let gateway = gateway_for_profile(&profile, &*self.secret_store)?;
         let binding = self.storage.codex_thread_binding_for_task(&input.task_id)?;
+        image_attachments::input(&self.database_path, &project_root, content, gateway.supports_images())?;
 
         let start_event = self.core.decide(AppCommand::StartTurn { task_id })?;
         let AppEvent::TurnStarted { turn } = &start_event else {
@@ -5736,6 +5744,13 @@ async fn consume_codex_events(
                     }
                 }
             }
+            CodexKernelEvent::OtherRequest { id, method, params } if method == "item/tool/call" => {
+                // Never hold the event gate while a browser approval is pending:
+                // native completion and stop must keep flowing independently.
+                tauri::async_runtime::spawn(browser::handle_tool(
+                    app.clone(), Arc::clone(&runtime), client.clone(), id, params,
+                ));
+            }
             CodexKernelEvent::OtherRequest { id, method, .. } => {
                 crate::logging::warn(
                     "codex_request_rejected",
@@ -5785,6 +5800,15 @@ async fn consume_codex_events(
                 }
             }
             event => {
+                if let CodexKernelEvent::TurnCompleted { thread_id, turn_id, .. } = &event {
+                    if let Ok(state) = runtime.lock() {
+                        if let Some(binding) = state.codex_action_binding(thread_id, turn_id) {
+                            if binding.codex_turn_id == *turn_id && state.codex_turn_links.get(turn_id) == Some(&binding) {
+                                app.state::<browser::BrowserState>().finish(&binding.turn_id);
+                            }
+                        }
+                    }
+                }
                 if let CodexKernelEvent::TurnCompleted {
                     thread_id, turn_id, ..
                 } = &event
@@ -5886,6 +5910,11 @@ async fn consume_codex_events(
     let effects = runtime
         .lock()
         .map(|mut runtime| {
+            for (turn, owner) in &runtime.codex_turn_owners {
+                if owner.instance_id == client.instance_id() {
+                    app.state::<browser::BrowserState>().finish(turn);
+                }
+            }
             runtime.fail_codex_projectors_for_instance(client.instance_id(), &terminal_error)
         })
         .unwrap_or_default();
@@ -6458,7 +6487,8 @@ async fn interrupt_codex_turn(
 }
 
 #[tauri::command]
-pub async fn cancel_turn(turn_id: String, state: State<'_, DesktopState>) -> Result<(), String> {
+pub async fn cancel_turn(turn_id: String, browser: State<'_, browser::BrowserState>, state: State<'_, DesktopState>) -> Result<(), String> {
+    browser.cancel(&turn_id);
     {
         let runtime = state.lock().map_err(command_error)?;
         if let Some(token) = runtime.preparing_codex_turns.get(&turn_id) {

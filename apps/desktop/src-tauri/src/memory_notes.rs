@@ -90,6 +90,12 @@ impl DesktopRuntime {
                 notes.revision, notes.content), "text_elements":[]}));
         }
         input.push(json!({"type":"text", "text":prepared.content,"text_elements":[]}));
+        input.extend(image_attachments::input(
+            &self.database_path,
+            &prepared.project_root,
+            &prepared.content,
+            prepared.gateway.supports_images(),
+        )?);
         Ok(input)
     }
 }

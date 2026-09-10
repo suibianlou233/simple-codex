@@ -1,7 +1,5 @@
 # Windows 公开测试版打包
 
-> 历史开发笔记：下文保留早期命令与命名，不适用于当前固定官方候选内核的发布构建。当前入口请使用 [开发说明](../../../docs/DEVELOPMENT.md) 中的 `scripts/build-release.ps1`，不要仅执行下面的旧 `pnpm tauri build` 来制作本版分发包。
-
 Local Agent 当前只生成 Windows x64 NSIS 安装包。安装范围是当前用户，不需要管理员权限；应用不包含自动更新器、遥测或账号模块。
 
 ## 构建环境

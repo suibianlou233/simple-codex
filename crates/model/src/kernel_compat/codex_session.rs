@@ -106,7 +106,9 @@ where
         &self,
         options: CodexThreadOptions<'_>,
     ) -> Result<String, CodexSessionError> {
-        let response = self.rpc.request("thread/start", options.params()).await?;
+        let mut params = options.params();
+        params["dynamicTools"] = super::browser_tools::tools();
+        let response = self.rpc.request("thread/start", params).await?;
         response_thread_id(&response)
     }
 
@@ -440,6 +442,7 @@ mod tests {
         let calls = rpc.calls()?;
         assert_eq!(calls.len(), 5);
         assert_eq!(calls[0].0, "thread/start");
+        assert_eq!(calls[0].1["dynamicTools"][0]["name"], "simple_browser");
         assert_eq!(calls[0].1["config"]["web_search"], "disabled");
         assert_eq!(calls[0].1["config"]["model_context_window"], 32000);
         assert_eq!(calls[0].1["approvalPolicy"], "on-request");

@@ -1,5 +1,41 @@
 # Third-party notices
 
+## Image and browser dependencies (2026-09-08)
+
+Simple uses unmodified image 0.25.9 (MIT OR Apache-2.0,
+https://github.com/image-rs/image) for image format and dimension validation,
+and tokio-tungstenite 0.28.0 (MIT,
+https://github.com/snapview/tokio-tungstenite) with tungstenite 0.28.0
+(MIT OR Apache-2.0, https://github.com/snapview/tungstenite-rs) for local
+browser CDP transport. Existing base64 0.22.1 and reqwest dependencies are
+reused. Cargo.lock pins versions and registry checksums, including transitive
+dependencies. scripts/collect-release-licenses.mjs collects the exact resolved
+dependency license and copyright files into every release before packaging.
+No upstream source was copied or modified for these integrations.
+
+tokio-tungstenite MIT notice:
+
+Copyright (c) 2017 Daniel Abramov
+Copyright (c) 2017 Alexey Galakhov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ## process-wrap 10.0.0
 
 Simple uses the unmodified `process-wrap` 10.0.0 crate for managed command and
@@ -124,3 +160,73 @@ Release resources retain `codex-LICENSE`,
 `codex-NOTICE`, and `codex-MODIFICATIONS.md` through the kernel sync script.
 Simple owns the local gateway, UI, task-tree cancellation adapter, and Windows
 native sandbox launch configuration; these do not imply full OS isolation.
+
+## Interactive terminal (2026-09-08)
+
+Unmodified portable-pty 0.9.0 (MIT, https://github.com/wez/wezterm), @xterm/xterm 5.5.0 and @xterm/addon-fit 0.10.0 (MIT, https://github.com/xtermjs/xterm.js) provide the OS PTY and terminal rendering. Cargo.lock and pnpm-lock.yaml pin exact package integrity. Simple-owned bridge and panel code connect them; the fixed agent kernel is unchanged.
+
+MIT License
+
+Copyright (c) 2018 Wez Furlong
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
+Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com)
+Copyright (c) 2012-2013, Christopher Jeffrey (https://github.com/chjj/)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

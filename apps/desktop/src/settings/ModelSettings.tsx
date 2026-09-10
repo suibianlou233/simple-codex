@@ -118,6 +118,7 @@ export function ModelSettings({
         <label><span>显示名称</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
         <label><span>接口地址</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} required /></label>
         <label><span>模型名称</span><input value={model} onChange={(event) => setModel(event.target.value)} required /></label>
+        {dialect === "deep_seek" ? <p className="settings-help">发送图片或浏览器截图时，会自动使用 deepseek-v4-flash-vision-exp，无需手动切换。上下文仍含图片时继续使用视觉模型；不含图片时使用上方所选模型。沿用当前接口和密钥，视觉模型按供应商规则计费。</p> : null}
         <label>
           <span>上下文窗口（Token）</span>
           <input

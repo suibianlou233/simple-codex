@@ -104,23 +104,23 @@ describe("toMessage", () => {
     expect(markup).toContain("当前为深色主题，切换到浅色主题");
   });
 
-  it("renders the workspace inspection controls used by the task header", () => {
+  it("renders only terminal and browser workspace controls", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceNavigation, {
-        inspectorMode: "diff",
+        browserOpen: true,
         terminalOpen: false,
-        onInspectorChange: () => undefined,
+        onBrowserToggle: () => undefined,
         onTerminalToggle: () => undefined,
       }),
     );
 
     expect(markup).toContain('class="sidebar-workspace-nav"');
     expect(markup).toContain('aria-label="工作区工具"');
-    expect(markup).toContain("文件");
-    expect(markup).toContain("Diff");
+    expect(markup).not.toContain("文件");
+    expect(markup).not.toContain("Diff");
     expect(markup).not.toContain(">Review<");
     expect(markup).toContain("终端");
-    const diffButton = markup.match(/<button[^>]*aria-label="Diff"[^>]*>/)?.[0];
+    const diffButton = markup.match(/<button[^>]*aria-label="浏览器"[^>]*>/)?.[0];
     expect(diffButton).toContain('class="is-active"');
     expect(diffButton).toContain('aria-pressed="true"');
   });

@@ -79,14 +79,14 @@ test("unknown submission keeps the composer blocked and explains that execution 
   await page.screenshot({path:info.outputPath("submission-uncertain.png")});
 });
 
-test("Git diff remains available without removed per-turn recovery controls", async ({ page }) => {
+test("workspace tools no longer expose file or diff panels", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("simple.ui.inspector", "diff"));
   await page.goto("/tests/ui/fixture.html");
   const tools = page.getByRole("navigation", { name: "工作区工具" });
-  await expect(tools.getByRole("button", { name: "Review", exact: true })).toHaveCount(0);
-  await tools.getByRole("button", { name: "Diff", exact: true }).click();
-  await expect(page.getByRole("complementary", { name: "工作区检查器" })).toContainText("+new value");
-  await expect(page.getByRole("button", { name: "检查中断后的修改" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "撤销此文件" })).toHaveCount(0);
+  await expect(tools.getByRole("button")).toHaveCount(2);
+  await expect(tools.getByRole("button", { name: "终端", exact:true })).toBeVisible();
+  await expect(tools.getByRole("button", { name: "浏览器", exact:true })).toBeVisible();
+  await expect(page.locator(".inspector-panel")).toHaveCount(0);
 });
 
 test("native final answer streams beside commentary before completion", async ({ page }) => {
@@ -190,26 +190,15 @@ test("searching a project name opens its tasks across projects without sending a
   await expect(input).toHaveValue("当前项目未发送的草稿");
 });
 
-test("diff, file races and per-task terminal", async ({ page }, info) => {
-  await page.setViewportSize({ width: 1600, height: 1000 });
+test("terminal uses an emulator instead of a command form", async ({ page }) => {
   await page.goto("/tests/ui/fixture.html");
-  await page.getByRole("button", { name: /切换到深色主题/ }).click();
-  await page.getByRole("navigation", { name: "工作区工具" }).getByRole("button", { name: "Diff", exact: true }).click();
-  await expect(page.locator(".diff-added").first()).toBeVisible();
-  await page.screenshot({ path: info.outputPath("conversation-dark-diff.png") });
-  await page.getByRole("navigation", { name: "检查器视图" }).getByRole("button", { name: "文件", exact: true }).click();
-  await page.getByRole("button", { name: /src\/components\/Composer.tsx/ }).click();
-  await page.getByRole("button", { name: /src\/app\/navigation.ts/ }).click();
-  await expect(page.locator(".file-preview")).toContainText("src/app/navigation.ts");
-  await page.waitForTimeout(250);
-  await expect(page.locator(".file-preview")).toContainText("src/app/navigation.ts");
-  await page.getByRole("button", { name: "关闭检查器" }).click();
   await page.getByRole("navigation", { name: "工作区工具" }).getByRole("button", { name: "终端", exact: true }).click();
-  await page.getByRole("textbox", { name: "终端命令" }).fill("git status --short");
-  await page.getByRole("button", { name: "运行", exact: true }).click();
-  await expect(page.locator(".terminal-output")).toContainText("浏览器预览：git status --short");
+  await expect(page.locator(".terminal-screen .xterm")).toBeVisible();
+  await expect(page.locator(".terminal-panel form")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "终端命令" })).toHaveCount(0);
   await page.locator(".task-row").filter({ hasText: "整理项目启动文档" }).click();
-  await expect(page.locator(".terminal-output")).not.toContainText("git status");
+  await expect(page.locator(".terminal-slot:not([hidden]) .xterm")).toBeVisible();
+  await expect(page.locator(".terminal-screen .xterm")).toHaveCount(2);
 });
 
 test("settings focus, escape and no horizontal overflow at minimum desktop size", async ({ page }, info) => {

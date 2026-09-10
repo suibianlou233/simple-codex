@@ -1,21 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { desktopBridge } from "../bridge";
 import { sendConversationMessage } from "../conversation";
-import { toggleInspector } from "./interactions";
 import { draftKey } from "./navigation";
+import { normalizeAttachments, validateImageFiles } from "./attachmentDraft";
 import { Sidebar } from "../components/Sidebar";
 import { TaskSearch } from "../components/TaskSearch";
 import { Icon } from "../components/Icon";
 import { useDesktopProjection } from "../store/entityStore";
 import { TaskTimeline } from "../items/TaskTimeline";
 import { Composer } from "../components/Composer";
+import { AttachmentProjectContext } from "../components/StoredImage";
+import { BrowserPanel } from "../panels/BrowserPanel";
+import { BrowserApproval } from "../panels/BrowserApproval";
+import { mediaAvailable, mediaBridge } from "../bridge/mediaBridge";
 import { EmptyWorkspace } from "../components/Welcome";
 import { AgentSettings } from "../settings/AgentSettings";
 import { ModelSettings } from "../settings/ModelSettings";
 import { FirstRunGuide } from "../components/FirstRunGuide";
 import { markGuideSeen, shouldShowGuide } from "./onboarding";
 import { toMessage } from "./feedback";
-import { InspectorPanel, TerminalPanel, type InspectorMode } from "../panels/WorkspacePanels";
+import { TerminalPanel } from "../panels/WorkspacePanels";
 import {
   applyResolvedTheme,
   persistThemePreference,
@@ -43,43 +48,15 @@ export function permissionForNextConversation(
   return selectedTaskPermission ?? draftPermission;
 }
 
-export function WorkspaceNavigation({
-  inspectorMode,
-  terminalOpen,
-  onInspectorChange,
-  onTerminalToggle,
-}: {
-  inspectorMode?: InspectorMode;
-  terminalOpen: boolean;
-  onInspectorChange: (mode: InspectorMode) => void;
-  onTerminalToggle: () => void;
+export function WorkspaceNavigation({ terminalOpen, browserOpen, onTerminalToggle, onBrowserToggle, terminalDisabled = false, browserDisabled = false }: {
+  terminalOpen: boolean; browserOpen: boolean;
+  onTerminalToggle: () => void; onBrowserToggle: () => void;
+  terminalDisabled?: boolean; browserDisabled?: boolean;
 }) {
-  return (
-    <nav className="sidebar-workspace-nav" aria-label="工作区工具">
-      {(["files", "diff"] as const).map((mode) => (
-        <button
-          className={inspectorMode === mode ? "is-active" : undefined}
-          type="button"
-          aria-pressed={inspectorMode === mode}
-          aria-label={mode === "files" ? "文件" : "Diff"}
-          title={mode === "files" ? "变更文件" : mode === "diff" ? "工作区差异" : "本轮改动"}
-          key={mode}
-          onClick={() => onInspectorChange(mode)}
-        >
-          <Icon name={mode === "files" ? "folder" : "diff"} size={16} /><span>{mode === "files" ? "文件" : "Diff"}</span>
-        </button>
-      ))}
-      <button
-        className={terminalOpen ? "is-active" : undefined}
-        type="button"
-        aria-pressed={terminalOpen}
-        aria-label="终端"
-        onClick={onTerminalToggle}
-      >
-        <Icon name="terminal" size={16} /><span>终端</span>
-      </button>
-    </nav>
-  );
+  return <nav className="sidebar-workspace-nav" aria-label="工作区工具">
+    <button type="button" className={terminalOpen ? "is-active" : undefined} aria-pressed={terminalOpen} aria-label="终端" disabled={terminalDisabled} onClick={onTerminalToggle}><Icon name="terminal" size={16} /><span>终端</span></button>
+    <button type="button" className={browserOpen ? "is-active" : undefined} aria-pressed={browserOpen} aria-label="浏览器" disabled={browserDisabled} onClick={onBrowserToggle}><Icon name="globe" size={16} /><span>浏览器</span></button>
+  </nav>;
 }
 
 export function App({ bridge = desktopBridge }: AppProps) {
@@ -97,19 +74,50 @@ export function App({ bridge = desktopBridge }: AppProps) {
   const composerDraft = drafts[currentDraftKey]?.content ?? "";
   const attachments = drafts[currentDraftKey]?.attachments ?? [];
   const setComposerDraft = (content: string) => setDrafts((all) => ({ ...all, [currentDraftKey]: { content, attachments: all[currentDraftKey]?.attachments ?? [] } }));
-  const setAttachments = (next: AttachmentSummary[] | ((current: AttachmentSummary[]) => AttachmentSummary[])) => setDrafts((all) => ({ ...all, [currentDraftKey]: { content: all[currentDraftKey]?.content ?? "", attachments: typeof next === "function" ? next(all[currentDraftKey]?.attachments ?? []) : next } }));
+  const setAttachments = (next: AttachmentSummary[] | ((current: AttachmentSummary[]) => AttachmentSummary[])) => setDrafts(all => {
+    try {
+      const selected = normalizeAttachments(typeof next === "function" ? next(all[currentDraftKey]?.attachments ?? []) : next);
+      return {...all, [currentDraftKey]: {content:all[currentDraftKey]?.content ?? "", attachments:selected}};
+    } catch (error) {
+      queueMicrotask(() => setError(error instanceof Error ? error.message : String(error)));
+      return all;
+    }
+  });
   const [newConversationPermission, setNewConversationPermission] =
     useState<PermissionLevel>("approval");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
-  const [inspectorMode, setInspectorMode] = useState<InspectorMode | undefined>(() => {
-    if (typeof window === "undefined") return undefined;
-    const saved = window.localStorage.getItem("simple.ui.inspector");
-    return saved === "files" || saved === "diff" ? saved : saved === "review" ? "diff" : undefined;
-  });
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalTasks, setTerminalTasks] = useState<string[]>([]);
+  const [resizingPanel, setResizingPanel] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(() => typeof window === "undefined" ? 1280 : window.innerWidth);
+  const [panelWidth, setPanelWidth] = useState(() => {
+    if (typeof window === "undefined") return 480;
+    const saved = Number(localStorage.getItem("simple.ui.rightPanelWidth"));
+    return Number.isFinite(saved) && saved >= 200 ? saved : window.innerWidth * .46;
+  });
+  useEffect(() => { const resize = () => setWindowWidth(window.innerWidth); window.addEventListener("resize", resize); return () => window.removeEventListener("resize", resize); }, []);
+  const panelMax = Math.max(200, windowWidth - (sidebarCollapsed ? 0 : windowWidth <= 1100 ? 220 : 252) - 280);
+  const panelMin = Math.min(320, panelMax);
+  const visiblePanelWidth = Math.round(Math.min(panelMax, Math.max(panelMin, panelWidth)));
+  const resizePanel = (width: number) => {
+    const next = Math.round(Math.min(panelMax, Math.max(panelMin, width)));
+    setPanelWidth(next); localStorage.setItem("simple.ui.rightPanelWidth", String(next));
+  };
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserApprovalOpen, setBrowserApprovalOpen] = useState(false);
+  useEffect(() => {
+    if (!mediaAvailable) return;
+    let stopped = false; let unlisten: (() => void) | undefined;
+    void listen<{projectPath:string}>("simple-browser-open",event=>{
+      const active=snapshot?.projects.find(project=>project.id===snapshot.activeProjectId);
+      const normalize=(path:string)=>path.replace(/\\/g,"/").toLowerCase();
+      if(active && normalize(active.path)===normalize(event.payload.projectPath)) { setTerminalOpen(false); setBrowserOpen(true); }
+    }).then(remove=>{if(stopped)remove();else unlisten=remove;}).catch(()=>undefined);
+    return ()=>{stopped=true;unlisten?.();};
+  }, [snapshot?.activeProjectId, snapshot?.projects]);
   const restoredSelection = useRef(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [followOutput, setFollowOutput] = useState(true);
@@ -150,9 +158,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (snapshot?.activeTaskId) window.localStorage.setItem("simple.ui.activeTaskId", snapshot.activeTaskId);
-    if (inspectorMode) window.localStorage.setItem("simple.ui.inspector", inspectorMode);
-    else window.localStorage.removeItem("simple.ui.inspector");
-  }, [inspectorMode, snapshot?.activeTaskId]);
+  }, [snapshot?.activeTaskId]);
 
   const activeProject = snapshot?.projects.find(
     (project) => project.id === snapshot.activeProjectId,
@@ -161,6 +167,9 @@ export function App({ bridge = desktopBridge }: AppProps) {
     (task) => task.id === snapshot.activeTaskId,
   );
   const activeTask = isNewConversation ? undefined : selectedTask;
+  useEffect(() => {
+    if (terminalOpen && activeTask) setTerminalTasks(current => current.includes(activeTask.id) ? current : [...current, activeTask.id]);
+  }, [terminalOpen, activeTask?.id]);
   const activeModel = snapshot?.modelProfiles.find(
     (profile) => profile.id === snapshot.activeModelProfileId,
   );
@@ -229,7 +238,9 @@ export function App({ bridge = desktopBridge }: AppProps) {
   }
 
   return (
-    <main className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${inspectorMode && activeTask ? " has-inspector" : ""}${terminalOpen && activeTask ? " has-terminal" : ""}`}>
+    <AttachmentProjectContext.Provider value={activeProject?.id}>
+    {mediaAvailable ? <BrowserApproval onVisibilityChange={setBrowserApprovalOpen} taskNames={Object.fromEntries(snapshot.tasks.map(task => [task.id, task.title]))} /> : null}
+    <main style={{"--right-panel-width": `${visiblePanelWidth}px`} as CSSProperties} className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${browserOpen && activeProject ? " has-browser" : ""}${(browserOpen && activeProject) || (terminalOpen && activeTask) ? " has-right-panel" : ""}${resizingPanel ? " is-resizing-panel" : ""}`}>
       {!sidebarCollapsed ? <Sidebar snapshot={snapshot} activeTaskId={activeTask?.id} busy={isBusy}
         theme={resolvedTheme} onTheme={setThemePreference} onCollapse={() => setSidebarCollapsed(true)}
         onSearch={() => setSearchOpen(true)} onNew={beginNewConversation}
@@ -252,16 +263,10 @@ export function App({ bridge = desktopBridge }: AppProps) {
               <small title={activeProject?.path}>{activeProject?.name ?? "本地工作区"}<span className="breadcrumb-divider">/</span>{activeTask ? "任务" : "开始新任务"}</small>
             </div>
           </div>
-          {activeTask ? (
-            <WorkspaceNavigation
-              inspectorMode={inspectorMode}
-              terminalOpen={terminalOpen}
-              onInspectorChange={(mode) => setInspectorMode((current) => toggleInspector(current, mode))}
-              onTerminalToggle={() => setTerminalOpen((value) => !value)}
-            />
-          ) : (
-            <button className="header-search" onClick={() => setSearchOpen(true)}><Icon name="search" size={16} />搜索任务</button>
-          )}
+          {activeProject ? <WorkspaceNavigation terminalOpen={terminalOpen} browserOpen={browserOpen}
+            terminalDisabled={!activeTask} browserDisabled={!mediaAvailable}
+            onTerminalToggle={() => { setBrowserOpen(false); setTerminalOpen(value => !value); }}
+            onBrowserToggle={() => { setTerminalOpen(false); setBrowserOpen(value => !value); }} /> : null}
         </header>
 
         <div className="workspace-banners">
@@ -280,7 +285,6 @@ export function App({ bridge = desktopBridge }: AppProps) {
             </div>
           ) : null}
         </div>
-
         <div
           className="timeline"
           aria-label="对话记录"
@@ -356,6 +360,22 @@ export function App({ bridge = desktopBridge }: AppProps) {
           content={composerDraft}
           attachments={attachments}
           onContentChange={setComposerDraft}
+          onImages={mediaAvailable ? async () => {
+            if (!activeProject) return;
+            await run(async () => {
+              const selected = await mediaBridge.pickImages(activeProject.id);
+              setAttachments(current => [...new Map([...current, ...selected].map(item => [item.path, item])).values()]);
+            });
+          } : undefined}
+          onPasteImages={mediaAvailable ? async files => {
+            if (!activeProject) return;
+            await run(async () => {
+              validateImageFiles(files);
+              const selected: AttachmentSummary[] = [];
+              for (const file of files) selected.push(await mediaBridge.pasteImage(activeProject.id, file));
+              setAttachments(current => [...new Map([...current, ...selected].map(item => [item.path, item])).values()]);
+            });
+          } : undefined}
           onAttach={async () => {
             if (!activeProject) return;
             await run(async () => {
@@ -415,20 +435,23 @@ export function App({ bridge = desktopBridge }: AppProps) {
         />
       </section>
 
-      {activeTask && inspectorMode ? (
-        <InspectorPanel
-          key={activeTask.id}
-          bridge={bridge}
-          taskId={activeTask.id}
-          mode={inspectorMode}
-          onModeChange={setInspectorMode}
-          onClose={() => setInspectorMode(undefined)}
-        />
-      ) : null}
-
-      {activeTask && terminalOpen ? (
-        <TerminalPanel key={activeTask.id} bridge={bridge} taskId={activeTask.id} onClose={() => setTerminalOpen(false)} />
-      ) : null}
+      {(activeProject && browserOpen) || terminalTasks.length > 0 ? <aside className="right-panel" hidden={!browserOpen && !terminalOpen} aria-label="右侧工作区">
+        <div className="right-panel-resizer" role="separator" aria-label="调整右侧栏宽度" aria-orientation="vertical" tabIndex={0}
+          aria-valuemin={panelMin} aria-valuemax={panelMax} aria-valuenow={visiblePanelWidth} title="拖动调整宽度，双击恢复默认"
+          onDoubleClick={()=>resizePanel(windowWidth * .46)}
+          onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);setResizingPanel(true);}}
+          onPointerMove={event=>{if(event.currentTarget.hasPointerCapture(event.pointerId)) resizePanel(window.innerWidth-event.clientX);}}
+          onPointerUp={event=>{if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);setResizingPanel(false);}}
+          onPointerCancel={()=>setResizingPanel(false)} onLostPointerCapture={()=>setResizingPanel(false)}
+          onKeyDown={event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();resizePanel(visiblePanelWidth+(event.key==='ArrowLeft'?24:-24));}else if(event.key==='Home'||event.key==='End'){event.preventDefault();resizePanel(event.key==='Home'?panelMin:panelMax);}}} />
+        {activeProject && browserOpen ? <BrowserPanel key={activeProject.id} projectId={activeProject.id}
+          suspended={isSettingsOpen || isGuideOpen || isAgentSettingsOpen || searchOpen || browserApprovalOpen || resizingPanel}
+          onClose={()=>setBrowserOpen(false)}
+          onAttach={attachment => setAttachments(current => current.some(item => item.path === attachment.path) ? current : [...current, attachment])} /> : null}
+        {terminalTasks.map(taskId => <div key={taskId} className="terminal-slot" hidden={!terminalOpen || taskId !== activeTask?.id}>
+          <TerminalPanel bridge={bridge} taskId={taskId} onClose={() => setTerminalOpen(false)} />
+        </div>)}
+      </aside> : null}
 
       {searchOpen ? <TaskSearch snapshot={snapshot} onClose={() => setSearchOpen(false)} onSelect={(task) => { void run(async () => { await bridge.selectTask(task.id); setIsNewConversation(false); setNewConversationPermission(task.permissionLevel); setSearchOpen(false); }); }} /> : null}
       {isSettingsOpen ? (
@@ -479,5 +502,6 @@ export function App({ bridge = desktopBridge }: AppProps) {
         }} />
       ) : null}
     </main>
+    </AttachmentProjectContext.Provider>
   );
 }

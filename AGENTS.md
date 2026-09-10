@@ -8,3 +8,5 @@
 - Preserve existing user changes. Add focused checks for code changes, but do not run tests or model calls when the user asks for manual testing only.
 - Read `docs/DEVELOPMENT.md` for the current source/build boundaries. Historical migration utilities are not the default launch path.
 
+
+- Workspace UI contains only Terminal and Browser, both in the resizable right sidebar. Terminal uses an interactive PTY; do not restore the command input/run form or the removed Files/Diff panels.

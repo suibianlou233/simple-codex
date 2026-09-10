@@ -2,7 +2,7 @@
 
 **A local-first, open-source AI coding agent for Windows, built around a pinned Codex execution kernel.**
 
-[简体中文](README.zh-CN.md) · English · [Download for Windows](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.0-rc.2/Simple-0.1.0-rc.20260906-windows-x64-234042.zip) · [Report an issue](https://github.com/suibianlou233/simple-codex/issues)
+[简体中文](README.zh-CN.md) · English · [Download for Windows](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.1-rc.1/Simple-0.1.1-rc.20260910-windows-x64-224336.zip) · [Report an issue](https://github.com/suibianlou233/simple-codex/issues)
 
 Thank you to OpenAI for open-sourcing Codex. Its source code makes it possible for me to learn from its architecture and continue building Simple Codex on that foundation.
 
@@ -12,7 +12,7 @@ Simple Codex brings a desktop interface, a local control layer, and model API ad
 
 ## Download and get started
 
-1. Download [the rc.2 Windows installer ZIP](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.0-rc.2/Simple-0.1.0-rc.20260906-windows-x64-234042.zip). Do not download GitHub's automatically generated source-code archive.
+1. Download [the 0.1.1 Windows installer ZIP](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.1-rc.1/Simple-0.1.1-rc.20260910-windows-x64-224336.zip). Do not download GitHub's automatically generated source-code archive.
 2. Extract the ZIP and run the setup program. Windows 10/11 x64 and Microsoft Edge WebView2 Evergreen Runtime are required. The installer does not download WebView2 automatically.
 3. Open Simple. The first-run guide takes you to model settings. Enter your endpoint, model name, and API Key, then save.
 4. Choose **Open project** and select a local folder. Start with a small, read-only task and an approval-based permission level.
@@ -31,7 +31,7 @@ The package includes the frontend, local backend, pinned kernel, and helper prog
 
 - **Desktop coding workflow:** local projects and conversations, streaming answers, stop controls, task search, and conversation history.
 - **Code and command tools:** project reading, file editing, and terminal execution through the kernel and Simple's permission controls.
-- **Review UI:** Git workspace diffs and a terminal panel. Completed progress messages collapse into an execution-process section with elapsed time; the final answer stays visible.
+- **Right sidebar:** embedded browser and a real interactive PowerShell terminal, with a draggable width divider. Files/Diff panel entries have been removed. Completed progress messages collapse into an execution-process section with elapsed time; the final answer stays visible.
 - **Model configuration:** DeepSeek, Qwen, and OpenAI-compatible API adapters; credentials are stored in the operating system's credential store.
 - **Local control:** local task storage and diagnostics, approval-based execution, and Windows sandbox integration with documented limitations.
 - **Separated architecture:** the pinned Codex kernel and Simple compatibility layer are managed separately; necessary upstream patches retain provenance and checksums.
@@ -79,3 +79,7 @@ Try a small task and [report issues](https://github.com/suibianlou233/simple-cod
 ## License
 
 Simple Codex is licensed under [Apache-2.0](LICENSE). Reused components retain their applicable licenses, notices, and modification records; see [third-party notices](THIRD_PARTY_NOTICES.md). The Windows release includes dependency-license information and kernel provenance.
+
+## 0.1.1 update
+
+Image attachments support drag/drop, paste and previews; DeepSeek image requests automatically use the vision model. The browser and PTY terminal share a resizable right sidebar. Terminal sessions survive task/browser switches. The fixed kernel is unchanged. Frontend tests (150), release build, startup and package checks passed; full image/browser model workflows and clean-machine installation still need acceptance.

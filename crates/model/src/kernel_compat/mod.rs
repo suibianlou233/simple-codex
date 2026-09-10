@@ -107,3 +107,4 @@ impl KernelAdapter {
         }
     }
 }
+mod browser_tools;

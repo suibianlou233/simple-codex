@@ -2,7 +2,7 @@
 
 **一个基于固定版本 Codex 执行内核、开源且本地优先的 Windows 桌面 AI 编程助手。**
 
-简体中文 · [English](README.md) · [下载 Windows 版本](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.0-rc.2/Simple-0.1.0-rc.20260906-windows-x64-234042.zip) · [反馈问题](https://github.com/suibianlou233/simple-codex/issues)
+简体中文 · [English](README.md) · [下载 Windows 版本](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.1-rc.1/Simple-0.1.1-rc.20260910-windows-x64-224336.zip) · [反馈问题](https://github.com/suibianlou233/simple-codex/issues)
 
 非常感谢 OpenAI 开源了 Codex 的代码，让我有机会学习它的架构，并基于这些开源成果继续开发 Simple Codex。
 
@@ -12,7 +12,7 @@ Simple Codex 在 Codex 执行内核外，提供桌面界面、本地控制层和
 
 ## 下载与开始使用
 
-1. 下载 [rc.2 Windows 安装包 ZIP](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.0-rc.2/Simple-0.1.0-rc.20260906-windows-x64-234042.zip)，不要下载 GitHub 自动生成的源码压缩包。
+1. 下载 [rc.2 Windows 安装包 ZIP](https://github.com/suibianlou233/simple-codex/releases/download/v0.1.1-rc.1/Simple-0.1.1-rc.20260910-windows-x64-224336.zip)，不要下载 GitHub 自动生成的源码压缩包。
 2. 解压后运行安装程序。需要 Windows 10/11 x64，以及已安装的 Microsoft Edge WebView2 Evergreen Runtime；安装包不会自动下载 WebView2。
 3. 启动 Simple，首次使用引导会带你进入模型设置。填写接口地址、模型名称和 API Key，保存即可。
 4. 点击左侧“打开项目”，选择本地文件夹。建议从一个小型只读任务开始，先使用需要审批的权限级别。
@@ -79,3 +79,7 @@ Simple 负责桌面界面、本地存储、模型网关、凭据管理及兼容�
 ## 开源协议
 
 Simple Codex 使用 [Apache-2.0](LICENSE) 协议。复用组件保留各自适用的许可证、署名与修改记录，见 [第三方声明](THIRD_PARTY_NOTICES.md)。Windows 分发包也附带依赖许可证说明与内核来源记录。
+
+## 0.1.1 更新
+
+支持图片拖拽、粘贴与预览，DeepSeek 图片请求自动使用视觉模型。内置浏览器和真实 PowerShell 终端共用可拖拽调宽的右侧栏，切换任务或浏览器保留终端会话。文件和 Diff 面板入口已移除。固定内核未修改。150 项前端测试、发布构建、启动及包内校验通过；图片/浏览器真实模型完整流程与干净机器安装仍待验收。

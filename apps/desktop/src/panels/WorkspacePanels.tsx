@@ -1,10 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   DesktopBridge,
   InspectorFile,
   GitWorkspaceDiff,
-  TerminalCommandResult,
-  TerminalSession,
 } from "../bridge/types";
 
 export type InspectorMode = "files" | "diff";
@@ -119,83 +117,4 @@ export function InspectorPanel({
   );
 }
 
-function splitCommandLine(value: string): string[] {
-  const parts: string[] = [];
-  let current = "";
-  let quote: '"' | "'" | undefined;
-  for (let index = 0; index < value.length; index += 1) {
-    const character = value[index];
-    if (quote) {
-      if (character === quote) quote = undefined;
-      else current += character;
-    } else if (character === '"' || character === "'") quote = character;
-    else if (/\s/.test(character)) {
-      if (current) parts.push(current);
-      current = "";
-    } else current += character;
-  }
-  if (current) parts.push(current);
-  return parts;
-}
-
-export function TerminalPanel({
-  bridge,
-  taskId,
-  onClose,
-}: {
-  bridge: DesktopBridge;
-  taskId: string;
-  onClose: () => void;
-}) {
-  const [session, setSession] = useState<TerminalSession>();
-  const [command, setCommand] = useState("");
-  const [running, setRunning] = useState(false);
-  const [history, setHistory] = useState<Array<{ command: string; result: TerminalCommandResult }>>([]);
-  const [error, setError] = useState<string>();
-
-  useEffect(() => {
-    void bridge.openTerminal(taskId).then(setSession).catch((cause: unknown) =>
-      setError(cause instanceof Error ? cause.message : String(cause)),
-    );
-  }, [bridge, taskId]);
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const parts = splitCommandLine(command.trim());
-    if (!session || parts.length === 0 || running) return;
-    const display = command.trim();
-    setRunning(true);
-    setError(undefined);
-    void bridge.runTerminalCommand(session.id, parts[0], parts.slice(1)).then((result) => {
-      setHistory((current) => [...current, { command: display, result }]);
-      setCommand("");
-    }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
-      .finally(() => setRunning(false));
-  };
-
-  return (
-    <section className="terminal-panel" aria-label="集成终端">
-      <header>
-        <div><strong>终端</strong><small>{session?.cwd ?? "正在创建本地会话…"}</small></div>
-        <span>{session?.processBoundary === "windows_job_object" ? "Windows Job Object 进程生命周期管理" : "仅管理直接进程"}</span>
-        <button type="button" aria-label="收起终端" onClick={onClose}>⌄</button>
-      </header>
-      <div className="terminal-output" aria-live="polite">
-        {history.map(({ command: display, result }) => (
-          <div key={result.commandId}>
-            <strong>&gt; {display}</strong>
-            {result.stdout ? <pre>{result.stdout}</pre> : null}
-            {result.stderr ? <pre className="terminal-stderr">{result.stderr}</pre> : null}
-            <small>退出码：{result.exitCode ?? "未启动"}{result.truncated ? " · 输出已截断" : ""}</small>
-          </div>
-        ))}
-        {error ? <p className="panel-error" role="alert">{error}</p> : null}
-      </div>
-      <form onSubmit={submit}>
-        <span aria-hidden="true">›</span>
-        <input value={command} disabled={!session || running} onChange={(event) => setCommand(event.target.value)} aria-label="终端命令" placeholder="输入程序和参数（直接执行，不经 shell 拼接）" />
-        <button type="submit" disabled={!session || running || !command.trim()}>{running ? "运行中" : "运行"}</button>
-      </form>
-    </section>
-  );
-}
+export { TerminalPanel } from "./TerminalPanel";

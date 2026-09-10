@@ -25,7 +25,7 @@ This first source publication excludes machine-local handoff notes, private deve
 
 ## Use the matching packaged kernel / 使用随包内核
 
-1. Download and install the matching [Windows prerelease](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.0-rc.2).
+1. Download and install the matching [Windows prerelease](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.1-rc.1).
 2. In the installed Simple directory, locate `kernels/official-283-windows-candidate-1`. Copy only `apply_patch.exe`, `codex-app-server.exe` and `codex-code-mode-host.exe` into the source checkout's `kernels/packages/official-283-windows-candidate-1` directory. Keep the checked-in manifest and notices. **Do not copy user data or credentials.**
 3. Build Simple's own helpers and install frontend dependencies from the repository root:
 
@@ -71,7 +71,7 @@ After preparing the matching kernel, frontend dependencies and pinned upstream s
 ./scripts/build-release.ps1 -KernelSource './upstream-codex' -Jobs 1
 ```
 
-Output: `target/release/bundle/nsis/Simple_0.1.0_x64-setup.exe`. Add `-Offline` only after required dependencies and build tools are cached. This does not make the initial setup offline.
+Output: `target/release/bundle/nsis/Simple_0.1.1_x64-setup.exe`. Add `-Offline` only after required dependencies and build tools are cached. This does not make the initial setup offline.
 
 The distributed package was built on the development machine. These clean-checkout setup instructions have not been independently exercised on a fresh machine; report missing steps rather than assuming complete reproducibility.
 

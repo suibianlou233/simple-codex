@@ -35,7 +35,8 @@ use crate::responses_chat_translation::prepare_chat_request;
 use crate::responses_chat_translation::translated_response_body;
 use crate::responses_tool_translation::ResponsesToolTranslation;
 
-const DEFAULT_MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+const DEFAULT_MAX_REQUEST_BYTES: usize = 48 * 1024 * 1024;
+const DEEPSEEK_VISION_MODEL: &str = "deepseek-v4-flash-vision-exp";
 const SIMPLE_MODEL_GATEWAY_URL_ENV_VAR: &str = "SIMPLE_MODEL_GATEWAY_URL";
 const SIMPLE_MODEL_GATEWAY_TOKEN_ENV_VAR: &str = "SIMPLE_MODEL_GATEWAY_TOKEN";
 const SIMPLE_MODEL_ALIAS_ENV_VAR: &str = "SIMPLE_MODEL_ALIAS";
@@ -75,6 +76,15 @@ pub enum ResponsesGatewayUpstream {
 }
 
 impl ResponsesGatewayConfig {
+    /// Capability of the Simple route, including native DeepSeek image routing.
+    pub fn supports_images(&self) -> bool {
+        self.upstream_protocol == ResponsesGatewayUpstream::DeepSeekResponses
+            || self
+                .upstream_model
+                .trim()
+                .eq_ignore_ascii_case(DEEPSEEK_VISION_MODEL)
+    }
+
     pub fn with_model_alias(mut self, alias: impl Into<String>) -> Self {
         self.codex_model_alias = alias.into();
         self
@@ -148,6 +158,7 @@ pub struct ResponsesGatewayHandle {
     base_url: String,
     client_token: GatewayClientToken,
     model_alias: String,
+    supports_images: bool,
     routes: Arc<routes::Routes>,
     shutdown: CancellationToken,
     task: Option<JoinHandle<Result<(), io::Error>>>,
@@ -155,6 +166,7 @@ pub struct ResponsesGatewayHandle {
 
 impl ResponsesGatewayHandle {
     pub async fn start(config: ResponsesGatewayConfig) -> Result<Self, ResponsesGatewayError> {
+        let supports_images = config.supports_images();
         let model_alias = config.codex_model_alias.trim().to_owned();
         let routes = Arc::new(routes::Routes::new(config.clone())?);
         let client_token = GatewayClientToken(format!(
@@ -187,6 +199,7 @@ impl ResponsesGatewayHandle {
             base_url,
             client_token,
             model_alias,
+            supports_images,
             routes,
             shutdown,
             task: Some(task),
@@ -199,6 +212,10 @@ impl ResponsesGatewayHandle {
 
     pub(crate) fn model_alias(&self) -> &str {
         &self.model_alias
+    }
+
+    pub(crate) fn supports_images(&self) -> bool {
+        self.supports_images
     }
 
     pub fn client_token(&self) -> &GatewayClientToken {
@@ -262,6 +279,42 @@ struct GatewayState {
     client_token: GatewayClientToken,
 }
 
+// Inspect only structured Responses input, never strings, tool schemas or arguments.
+// History and tool screenshots count: sending them to a text model would lose context.
+fn input_contains_images(payload: &serde_json::Map<String, Value>) -> bool {
+    fn image_parts(value: &Value) -> bool {
+        value
+            .as_array()
+            .is_some_and(|parts| parts.iter().any(|part| part["type"] == "input_image"))
+    }
+    payload
+        .get("input")
+        .and_then(Value::as_array)
+        .is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| match item.get("type").and_then(Value::as_str) {
+                    Some("message") | None => image_parts(&item["content"]),
+                    Some("function_call_output" | "custom_tool_call_output") => {
+                        image_parts(&item["output"])
+                    }
+                    _ => false,
+                })
+        })
+}
+
+fn request_model<'a>(
+    model: &'a str,
+    protocol: ResponsesGatewayUpstream,
+    payload: &serde_json::Map<String, Value>,
+) -> &'a str {
+    if protocol == ResponsesGatewayUpstream::DeepSeekResponses && input_contains_images(payload) {
+        DEEPSEEK_VISION_MODEL
+    } else {
+        model
+    }
+}
+
 async fn forward_responses(
     State(state): State<Arc<GatewayState>>,
     headers: HeaderMap,
@@ -286,6 +339,7 @@ async fn forward_responses(
         }
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    let upstream_model = request_model(&state.upstream_model, state.upstream_protocol, &payload);
     let tool_translation = if state.upstream_protocol == ResponsesGatewayUpstream::DeepSeekResponses
     {
         match ResponsesToolTranslation::prepare(&mut payload) {
@@ -297,10 +351,7 @@ async fn forward_responses(
     };
     let prepared_chat = match state.upstream_protocol {
         ResponsesGatewayUpstream::Responses | ResponsesGatewayUpstream::DeepSeekResponses => {
-            payload.insert(
-                "model".to_owned(),
-                Value::String(state.upstream_model.clone()),
-            );
+            payload.insert("model".to_owned(), Value::String(upstream_model.to_owned()));
             None
         }
         ResponsesGatewayUpstream::ChatCompletions { dialect } => {
@@ -500,6 +551,93 @@ mod tests {
     use axum::routing::post;
 
     use super::*;
+
+    #[test]
+    fn image_routing_ignores_text_and_other_provider_routes() {
+        let fake = json!({"input":[{"role":"user","content":[{"type":"input_text","text":"{\"type\":\"input_image\"}"}]}],"tools":[{"type":"input_image"}]});
+        assert!(!input_contains_images(fake.as_object().unwrap()));
+        let picture = json!({"input":[{"role":"user","content":[{"type":"input_image","image_url":"data:image/png;base64,fixture"}]}]});
+        assert_eq!(
+            request_model(
+                "other-model",
+                ResponsesGatewayUpstream::Responses,
+                picture.as_object().unwrap()
+            ),
+            "other-model"
+        );
+        assert!(
+            !ResponsesGatewayConfig::new("http://localhost", "other-model", None).supports_images()
+        );
+        assert!(
+            ResponsesGatewayConfig::new("http://localhost", "deepseek-v4-flash", None)
+                .with_deepseek_responses()
+                .supports_images()
+        );
+    }
+
+    #[tokio::test]
+    async fn deepseek_auto_vision_preserves_images_and_returns_to_text_without_mutating_route() {
+        use wiremock::matchers::{body_partial_json, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        let gateway = ResponsesGatewayHandle::start(
+            ResponsesGatewayConfig::new(
+                server.uri(),
+                "deepseek-v4-flash",
+                Some(ApiKey::new("fixture-key").unwrap()),
+            )
+            .with_model_alias("same-session-route")
+            .with_deepseek_responses(),
+        )
+        .await
+        .unwrap();
+        let cases = [
+            (
+                json!([{"role":"user","content":[{"type":"input_text","text":"hello"}]}]),
+                "deepseek-v4-flash",
+            ),
+            (
+                json!([{"role":"user","content":[{"type":"input_image","image_url":"data:image/png;base64,fixture"}]}]),
+                DEEPSEEK_VISION_MODEL,
+            ),
+            (
+                json!([{"type":"function_call_output","call_id":"browser","output":[{"type":"input_image","image_url":"data:image/png;base64,screenshot"}]}]),
+                DEEPSEEK_VISION_MODEL,
+            ),
+            (
+                json!([{"type":"custom_tool_call_output","call_id":"browser","output":[{"type":"input_image","image_url":"data:image/png;base64,custom"}]}]),
+                DEEPSEEK_VISION_MODEL,
+            ),
+            (
+                json!([{"role":"user","content":[{"type":"input_image","image_url":"data:image/png;base64,history"}]},{"role":"assistant","content":[{"type":"output_text","text":"seen"}]},{"role":"user","content":[{"type":"input_text","text":"follow up"}]}]),
+                DEEPSEEK_VISION_MODEL,
+            ),
+            (
+                json!([{"role":"user","content":"text after image-free context"}]),
+                "deepseek-v4-flash",
+            ),
+        ];
+        for (input, model) in cases {
+            let expected_input = input.clone();
+            Mock::given(method("POST")).and(path("/responses"))
+                .and(header("authorization", "Bearer fixture-key"))
+                .and(body_partial_json(json!({"model":model,"input":expected_input})))
+                .respond_with(ResponseTemplate::new(200).insert_header("content-type", "text/event-stream")
+                    .set_body_string("data: {\"type\":\"response.completed\",\"response\":{\"output\":[]}}\n\n"))
+                .expect(1).mount(&server).await;
+            let response = Client::new()
+                .post(format!("{}/responses", gateway.base_url()))
+                .bearer_auth(gateway.client_token().expose_for_child())
+                .json(&json!({"model":"same-session-route","stream":true,"input":input}))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let _ = response.text().await.unwrap();
+        }
+        server.verify().await;
+        gateway.shutdown().await.unwrap();
+    }
 
     #[derive(Clone)]
     struct UpstreamState {

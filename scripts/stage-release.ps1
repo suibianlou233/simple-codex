@@ -8,11 +8,12 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $OutputRoot) { $OutputRoot = Join-Path $projectRoot 'releases' }
 $installerFile = Get-Item -LiteralPath $Installer
 if ($installerFile.Extension -ne '.exe') { throw 'Expected a built NSIS installer.' }
-$releaseName = 'Simple-0.1.0-rc.20260906-windows-x64-' + (Get-Date -Format 'HHmmss')
+$version = (Get-Content -LiteralPath (Join-Path $projectRoot 'apps/desktop/src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json).version
+$releaseName = 'Simple-' + $version + '-rc.' + (Get-Date -Format 'yyyyMMdd') + '-windows-x64-' + (Get-Date -Format 'HHmmss')
 $stage = Join-Path $OutputRoot $releaseName
 if (Test-Path -LiteralPath $stage) { throw "Output already exists: $stage" }
 New-Item -ItemType Directory -Path $stage | Out-Null
-Copy-Item -LiteralPath $installerFile.FullName -Destination (Join-Path $stage 'Simple-0.1.0-rc.20260906-windows-x64-setup.exe')
+Copy-Item -LiteralPath $installerFile.FullName -Destination (Join-Path $stage ($releaseName + '-setup.exe'))
 Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging/README-release.md') -Destination (Join-Path $stage 'README.md')
 foreach ($name in @('LICENSE', 'THIRD_PARTY_NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $stage
@@ -34,6 +35,24 @@ $sourceFiles = @(
     'apps/desktop/src-tauri/src/legacy_execution.rs',
     'apps/desktop/src-tauri/src/lib.rs',
     'apps/desktop/src-tauri/src/main.rs',
+    'apps/desktop/src-tauri/src/interactive_terminal.rs',
+    'apps/desktop/src/panels/TerminalPanel.tsx',
+    'apps/desktop/src-tauri/src/browser.rs',
+    'apps/desktop/src-tauri/src/browser_access.rs',
+    'apps/desktop/src/panels/BrowserApproval.tsx',
+    'apps/desktop/src/app/attachmentDraft.ts',
+    'apps/desktop/src-tauri/src/browser_actions.js',
+    'apps/desktop/src-tauri/src/image_attachments.rs',
+    'apps/desktop/src-tauri/src/memory_notes.rs',
+    'apps/desktop/src/bridge/mediaBridge.ts',
+    'apps/desktop/src/components/Composer.tsx',
+    'apps/desktop/src/components/StoredImage.tsx',
+    'apps/desktop/src/items/MarkdownMessage.tsx',
+    'apps/desktop/src/panels/BrowserPanel.tsx',
+    'crates/model/src/responses_gateway.rs',
+    'crates/model/src/kernel_compat/upstream_283.rs',
+    'crates/model/src/kernel_compat/browser_tools.rs',
+    'crates/model/src/kernel_compat/mod.rs',
     'apps/desktop/src/app/WorkbenchApp.tsx',
     'apps/desktop/src/app/onboarding.ts',
     'apps/desktop/src/components/FirstRunGuide.tsx',
@@ -54,7 +73,7 @@ $fingerprints = @($sourceFiles | ForEach-Object {
 $manifest = [ordered]@{
     release = $releaseName
     builtAtUtc = [DateTime]::UtcNow.ToString('o')
-    internalVersion = '0.1.0'
+    internalVersion = $version
     status = 'unsigned-release-candidate'
     architecture = 'windows-x86_64'
     kernelCommit = '28327355b861ab6cc76b01c7248663eb1be440cf'
