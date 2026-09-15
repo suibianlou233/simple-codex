@@ -1,10 +1,13 @@
 param(
     [Parameter(Mandatory = $true)][string]$Installer,
-    [string]$OutputRoot
+    [string]$OutputRoot,
+    [string]$SourceCommit
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$buildTarget = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $projectRoot 'target' }
+if ($SourceCommit -and $SourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Expected a full source commit SHA.' }
 if (-not $OutputRoot) { $OutputRoot = Join-Path $projectRoot 'releases' }
 $installerFile = Get-Item -LiteralPath $Installer
 if ($installerFile.Extension -ne '.exe') { throw 'Expected a built NSIS installer.' }
@@ -72,6 +75,7 @@ $fingerprints = @($sourceFiles | ForEach-Object {
 })
 $manifest = [ordered]@{
     release = $releaseName
+    sourceCommit = $SourceCommit
     builtAtUtc = [DateTime]::UtcNow.ToString('o')
     internalVersion = $version
     status = 'unsigned-release-candidate'
@@ -79,7 +83,7 @@ $manifest = [ordered]@{
     kernelCommit = '28327355b861ab6cc76b01c7248663eb1be440cf'
     kernelPackage = 'official-283-windows-candidate-1'
     kernelManifestSha256 = (Get-FileHash -LiteralPath (Join-Path $kernel 'kernel.json') -Algorithm SHA256).Hash.ToLowerInvariant()
-    desktopExeSha256 = (Get-FileHash -LiteralPath (Join-Path $projectRoot 'target/release/local-agent-desktop.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+    desktopExeSha256 = (Get-FileHash -LiteralPath (Join-Path $buildTarget 'release/local-agent-desktop.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
     buildFeature = 'bundled-official-kernel'
     sourceFingerprints = $fingerprints
     prerequisites = @('Windows 10/11 x64', 'Microsoft Edge WebView2 Evergreen Runtime')
