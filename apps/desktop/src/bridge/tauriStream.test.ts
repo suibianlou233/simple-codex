@@ -215,3 +215,22 @@ it("preserves phase through batching, deduplicates wire events and rejects late 
   expect(latest.activeTurnId).toBeNull();
   unsubscribe();
 });
+
+
+it.each(["started", "delta"])("leaves kernel preparation on native %s without losing the running lock", async kind => {
+  vi.useFakeTimers();
+  wire.snapshot = {projects:[{id:"p",name:"p",path:"fixture"}],
+    tasks:[{id:"t",projectId:"p",title:"fixture",goal:"fixture",status:"running",updatedAtMs:1,lastSequence:1}],
+    turns:[{id:"turn",taskId:"t",status:"running",phase:"preparing_kernel",startedAtMs:1,finishedAtMs:null,sequence:1}],
+    messages:[],dataLocation:"fixture.db"};
+  const bridge = new TauriDesktopBridge();
+  const store = new WorkbenchStore();
+  store.hydrate(await bridge.load());
+  const unsubscribe = bridge.subscribe(store.hydrate);
+  wire.listeners.get("turn-stream")?.({payload:{eventId:kind,sequence:2,taskId:"t",turnId:"turn",kind,content:kind === "delta" ? "正在生成" : undefined}});
+  await vi.advanceTimersByTimeAsync(33);
+  expect(store.getSnapshot()!.turns[0].phase).toBe("sampling");
+  expect(store.getSnapshot()!.turns[0].status).toBe("running");
+  expect(store.getSnapshot()!.activeTurnId).toBe("turn");
+  unsubscribe();
+});

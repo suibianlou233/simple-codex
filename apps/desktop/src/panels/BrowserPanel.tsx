@@ -4,6 +4,7 @@ import { Icon } from "../components/Icon";
 import type { AttachmentSummary } from "../bridge/types";
 
 export function BrowserPanel({ projectId, onAttach, onClose, suspended = false }: { projectId: string; onAttach: (attachment: AttachmentSummary) => void; onClose: () => void; suspended?: boolean }) {
+  const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
   const [url, setUrl] = useState("http://localhost:3000");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,7 +72,7 @@ export function BrowserPanel({ projectId, onAttach, onClose, suspended = false }
     finally { setBusy(false); }
   };
   return <section className="browser-panel" aria-label="内置浏览器">
-    <header><strong><Icon name="globe" size={16} />浏览器</strong><div><button type="button" disabled={busy || !hasPage} onClick={() => void run({ action: "screenshot" })} title="截图添加到输入框">截图</button><button className="icon-button" type="button" onClick={onClose} aria-label="收起浏览器"><Icon name="close" size={16} /></button></div></header>
+    <header><strong><Icon name="globe" size={16} />浏览器</strong><div><button type="button" disabled={mac || busy || !hasPage} onClick={() => void run({ action: "screenshot" })} title={mac ? "Mac 暂不支持浏览器截图" : "截图添加到输入框"}>截图</button><button className="icon-button" type="button" onClick={onClose} aria-label="收起浏览器"><Icon name="close" size={16} /></button></div></header>
     <form onSubmit={event => { event.preventDefault(); void run({ action: "open", url }); }}>
       <button type="button" disabled={busy} onClick={() => void run({ action: "back" })} aria-label="网页后退">←</button>
       <button type="button" disabled={busy} onClick={() => void run({ action: "forward" })} aria-label="网页前进">→</button>

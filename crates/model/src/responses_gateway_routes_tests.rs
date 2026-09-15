@@ -17,7 +17,7 @@ async fn qwen_gateway_sends_supported_roles_to_chat_endpoint() {
     Mock::given(method("POST"))
         .and(path("/chat/completions"))
         .and(body_partial_json(json!({"model":"qwen3.8-max","messages":[
-            {"role":"system","content":"Agent instructions"},
+            {"role":"system","content":format!("Agent instructions\n\n{SIMPLE_LANGUAGE_POLICY}")},
             {"role":"system","content":"Developer instructions"},
             {"role":"user","content":"Hello"}
         ]})))

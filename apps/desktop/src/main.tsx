@@ -5,6 +5,7 @@ import { recordFrontendDiagnostic } from "./bridge/tauriBridge";
 import { applyInitialTheme } from "./theme";
 import "./styles.css";
 import "./design/workbench.css";
+import "./code/code.css";
 
 applyInitialTheme();
 

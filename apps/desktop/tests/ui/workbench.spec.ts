@@ -207,7 +207,7 @@ test("settings focus, escape and no horizontal overflow at minimum desktop size"
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("button", { name: /保存并使用/ })).toBeFocused();
+  await expect(page.getByRole("dialog").getByRole("button").last()).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("dialog").getByRole("button", { name: "关闭", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");

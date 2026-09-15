@@ -1,0 +1,15 @@
+{
+  "upstream_revision": "28327355b861ab6cc76b01c7248663eb1be440cf",
+  "version": "150.4.0",
+  "base_url": "https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0",
+  "targets": {
+    "aarch64-apple-darwin": {
+      "librusty_v8_ptrcomp_sandbox_release_aarch64-apple-darwin.a.gz": "00adbb48798848c77550441c68673a5e8529b8e1b73eabcdee232cb39b40f4a1",
+      "src_binding_ptrcomp_sandbox_release_aarch64-apple-darwin.rs": "ca5adf0cf89c9a70ad460ae73648b2fe89b74aa113b3cb7f757b6a02b758394f"
+    },
+    "x86_64-apple-darwin": {
+      "librusty_v8_ptrcomp_sandbox_release_x86_64-apple-darwin.a.gz": "e0d9bb64e8b3a034c2930c83972f3f35760211148342fa0407b38250ef330856",
+      "src_binding_ptrcomp_sandbox_release_x86_64-apple-darwin.rs": "ca5adf0cf89c9a70ad460ae73648b2fe89b74aa113b3cb7f757b6a02b758394f"
+    }
+  }
+}

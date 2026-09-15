@@ -3,5 +3,9 @@
   "identifier": "default",
   "description": "Base desktop capability with no network or filesystem plugins.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default", "core:window:allow-destroy",
+    "core:window:allow-minimize", "core:window:allow-toggle-maximize",
+    "core:window:allow-close", "core:window:allow-start-dragging"
+  ]
 }

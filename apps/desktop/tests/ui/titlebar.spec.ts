@@ -1,0 +1,23 @@
+import { test,expect } from "@playwright/test";
+test("one toolbar keeps window controls reachable and requests safe close",async({page},info)=>{
+  await page.setViewportSize({width:960,height:640});
+  await page.goto("/tests/ui/fixture.html?scenario=code");
+  await page.getByRole("combobox",{name:"工作模式"}).selectOption("code");
+  await expect(page.locator(".simple-mode-bar")).toHaveCount(1);
+  await expect(page.locator(".window-drag-spacer")).toHaveAttribute("data-tauri-drag-region","true");
+  await expect(page.getByRole("button",{name:"关闭窗口",exact:true})).toBeInViewport();
+  const controls=await page.locator(".window-controls").boundingBox();
+  const tools=await page.locator(".code-tools").boundingBox();
+  expect(tools!.x+tools!.width).toBeLessThanOrEqual(controls!.x);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(960);
+  await page.getByRole("button",{name:"最大化窗口",exact:true}).click();
+  await expect(page.getByRole("button",{name:"还原窗口",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"还原窗口",exact:true}).click();
+  await page.getByRole("button",{name:"最小化窗口",exact:true}).click();
+  await page.getByRole("button",{name:"关闭窗口",exact:true}).click();
+  const calls=await page.evaluate(()=>(window as unknown as {__windowCalls:string[]}).__windowCalls);
+  expect(calls).toContain("plugin:window|minimize");
+  expect(calls).toContain("plugin:window|close");
+  expect(calls).not.toContain("plugin:window|destroy");
+  await page.screenshot({path:info.outputPath("single-titlebar.png")});
+});

@@ -17,6 +17,8 @@ pub(crate) fn spawn(command: Command) -> io::Result<Box<dyn ChildWrapper>> {
         flags.0.0 = 0x08000000; // CREATE_NO_WINDOW
         command.wrap(flags).wrap(process_wrap::tokio::JobObject);
     }
+    #[cfg(unix)]
+    command.wrap(process_wrap::tokio::ProcessGroup::leader());
     command.spawn()
 }
 
@@ -25,7 +27,14 @@ pub(crate) async fn terminate(child: &mut Box<dyn ChildWrapper>) -> io::Result<(
     // A successful wait for that child alone says nothing about its descendants.
     #[cfg(windows)]
     child.start_kill()?;
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    if let Err(error) = child.start_kill() {
+        // ESRCH means the entire process group has already exited.
+        if error.raw_os_error() != Some(3) {
+            return Err(error);
+        }
+    }
+    #[cfg(not(any(windows, unix)))]
     if child.try_wait()?.is_none() {
         child.start_kill()?;
     }
@@ -43,3 +52,18 @@ pub(crate) async fn terminate(child: &mut Box<dyn ChildWrapper>) -> io::Result<(
 #[cfg(all(test, windows))]
 #[path = "codex_process_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+mod unix_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn termination_reaps_the_managed_process_and_is_repeatable() {
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "sleep 60 & wait"]);
+        let mut child = spawn(command).expect("spawn process group");
+        terminate(&mut child).await.expect("terminate group");
+        assert!(child.try_wait().expect("wait").is_some());
+        terminate(&mut child).await.expect("already terminated");
+    }
+}

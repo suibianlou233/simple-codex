@@ -355,8 +355,8 @@ async fn execute(
     access_revision: Option<u64>,
 ) -> Result<BrowserResult, String> {
     validate(request)?;
-    if !cfg!(windows) {
-        return Err(err("当前内置浏览器仅支持 Windows"));
+    if !cfg!(any(windows, target_os = "macos")) {
+        return Err(err("当前内置浏览器仅支持 Windows 和 macOS"));
     }
     let key = project_key(project)?;
     let state = app.state::<BrowserState>();
@@ -393,12 +393,17 @@ async fn execute(
         if request.action != "open" {
             return Err(err("请先打开当前项目的网页"));
         }
-        let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-            .map_err(|_| err("浏览器端口不可用"))?;
-        let port = listener
-            .local_addr()
-            .map_err(|_| err("浏览器端口不可用"))?
-            .port();
+        #[cfg(windows)]
+        let port = {
+            let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                .map_err(|_| err("浏览器端口不可用"))?;
+            listener
+                .local_addr()
+                .map_err(|_| err("浏览器端口不可用"))?
+                .port()
+        };
+        #[cfg(not(windows))]
+        let port = 0;
         sessions.insert(
             key.clone(),
             BrowserSession {
@@ -408,7 +413,6 @@ async fn execute(
                 navigation_origin: Arc::new(Mutex::new(None)),
             },
         );
-        drop(listener);
     }
     let session = sessions
         .get_mut(&key)
@@ -437,6 +441,7 @@ async fn execute(
             window.navigate(url).map_err(|_| err("网页导航失败"))?;
         } else {
             session.target = None;
+            #[cfg(not(target_os = "macos"))]
             let profile = app
                 .path()
                 .app_local_data_dir()
@@ -446,7 +451,6 @@ async fn execute(
             // Separate profile/process prevents CDP from exposing the privileged main WebView.
             let navigation_origin = session.navigation_origin.clone();
             let builder = WebviewBuilder::new(&session.label, WebviewUrl::External(url))
-                .data_directory(profile)
                 .on_navigation(move |url| {
                     web_url(url.as_str()).is_ok()
                         && navigation_origin.lock().is_ok_and(|allowed| {
@@ -457,6 +461,12 @@ async fn execute(
                 })
                 .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
                 .on_download(|_, _| false);
+            #[cfg(not(target_os = "macos"))]
+            let builder = builder.data_directory(profile);
+            // WKWebView's dedicated persistent store (macOS 14+) isolates each
+            // project's cookies from the privileged main webview and other projects.
+            #[cfg(target_os = "macos")]
+            let builder = builder.data_store_identifier(browser_store_id(&key)?);
             #[cfg(windows)]
             let builder = builder.additional_browser_args(&format!("--remote-debugging-address=127.0.0.1 --remote-debugging-port={} --no-first-run --disable-background-networking", session.port));
             let main = app.get_window("main").ok_or_else(|| err("主窗口不可用"))?;
@@ -507,6 +517,9 @@ async fn execute(
         return Err(err("网页地址在确认后发生变化，请重新请求操作"));
     }
     if request.action == "screenshot" {
+        if cfg!(target_os = "macos") {
+            return Err(err("Mac 浏览器截图暂不支持；可使用 read 读取网页内容"));
+        }
         let before = cdp(session, "Page.getFrameTree", json!({})).await?;
         let captured = cdp(
             session,
@@ -530,6 +543,9 @@ async fn execute(
             image: Some(format!("data:image/png;base64,{data}")),
         });
     }
+    #[cfg(target_os = "macos")]
+    let result = evaluate_webkit(&window, script(request, &url)).await?;
+    #[cfg(not(target_os = "macos"))]
     let result = evaluate(session, script(request, &url)).await?;
     if let Some(error) = result["error"].as_str() {
         return Err(error.to_owned());
@@ -540,6 +556,42 @@ async fn execute(
         attachment: None,
         image: None,
     })
+}
+
+#[cfg(target_os = "macos")]
+fn browser_store_id(key: &str) -> Result<[u8; 16], String> {
+    let mut id = [0; 16];
+    for (index, byte) in id.iter_mut().enumerate() {
+        *byte = key
+            .get(index * 2..index * 2 + 2)
+            .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+            .ok_or_else(|| err("浏览器数据标识无效"))?;
+    }
+    Ok(id)
+}
+
+#[cfg(target_os = "macos")]
+async fn evaluate_webkit(view: &Webview, expression: String) -> Result<Value, String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let sender = Mutex::new(Some(sender));
+    // Only Simple's fixed action script is evaluated. Remote content gets no
+    // IPC command or callback name it could invoke in the privileged main view.
+    view.eval_with_callback(
+        format!("(() => {{ try {{ return {expression}; }} catch (_) {{ return {{error: '网页操作失败，请重新读取页面'}}; }} }})()"),
+        move |result| {
+            if let Ok(mut slot) = sender.lock() {
+                if let Some(sender) = slot.take() {
+                    let result = if result.len() <= 512 * 1024 { Ok(result) } else { Err(err("网页返回内容过大")) };
+                    let _ = sender.send(result);
+                }
+            }
+        },
+    ).map_err(|_| err("无法执行网页操作"))?;
+    let result = tokio::time::timeout(std::time::Duration::from_secs(15), receiver)
+        .await
+        .map_err(|_| err("网页操作超时，请重新读取页面"))?
+        .map_err(|_| err("网页已关闭"))??;
+    serde_json::from_str(&result).map_err(|_| err("网页返回结果无效"))
 }
 
 async fn current_url(app: &AppHandle, project: &Path) -> Result<String, String> {
@@ -751,10 +803,40 @@ mod tests {
     use super::*;
     #[test]
     fn embedded_viewport_rejects_invalid_geometry_and_stays_inside_main_window() {
-        let clipped = checked_bounds(&BrowserBounds{x:900.0,y:100.0,width:800.0,height:900.0},1280.0,800.0).unwrap();
-        assert_eq!(clipped.width,380.0); assert_eq!(clipped.height,700.0);
-        for bounds in [BrowserBounds{x:-1.0,y:0.0,width:10.0,height:10.0},BrowserBounds{x:0.0,y:0.0,width:f64::NAN,height:10.0},BrowserBounds{x:1280.0,y:0.0,width:10.0,height:10.0}] {
-            assert!(checked_bounds(&bounds,1280.0,800.0).is_err());
+        let clipped = checked_bounds(
+            &BrowserBounds {
+                x: 900.0,
+                y: 100.0,
+                width: 800.0,
+                height: 900.0,
+            },
+            1280.0,
+            800.0,
+        )
+        .unwrap();
+        assert_eq!(clipped.width, 380.0);
+        assert_eq!(clipped.height, 700.0);
+        for bounds in [
+            BrowserBounds {
+                x: -1.0,
+                y: 0.0,
+                width: 10.0,
+                height: 10.0,
+            },
+            BrowserBounds {
+                x: 0.0,
+                y: 0.0,
+                width: f64::NAN,
+                height: 10.0,
+            },
+            BrowserBounds {
+                x: 1280.0,
+                y: 0.0,
+                width: 10.0,
+                height: 10.0,
+            },
+        ] {
+            assert!(checked_bounds(&bounds, 1280.0, 800.0).is_err());
         }
     }
     #[test]

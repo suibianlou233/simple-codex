@@ -8,8 +8,11 @@ import { MemoryDesktopBridge } from "../../src/bridge/memoryBridge";
 import type { DesktopBridge, DesktopSnapshot, GitWorkspaceDiff } from "../../src/bridge/types";
 import "../../src/styles.css";
 import "../../src/design/workbench.css";
+import "../../src/code/code.css";
+import { installEditorMock } from "./editorMock";
 
 const scenario = new URLSearchParams(location.search).get("scenario");
+if (scenario === "code") installEditorMock();
 // Existing workbench cases model a returning user. Onboarding cases use the real first-run path.
 if (scenario !== "onboarding") localStorage.setItem(GUIDE_SEEN_KEY, "seen");
 const running = scenario === "approval" || scenario === "running" || scenario === "completion-wait" || scenario === "completion-unknown" || scenario === "submission-unknown" || scenario === "submission-cold";
@@ -58,6 +61,14 @@ if (scenario === "submission-unknown" || scenario === "submission-cold") {
   // Emulate a stale capability from an old snapshot, not a backend permission.
   const snapshot = await bridge.load();
   snapshot.actions = [{id:"stale-undo",taskId:"ui-a",turnId:"ui-turn",kind:"write_file",status:"applied",title:"旧修改",detail:"file.txt",diff:null,result:null,canUndo:true,createdAt:updatedAt}];
+  createRoot(document.getElementById("root")!).render(<App bridge={new MemoryDesktopBridge(snapshot)} />);
+} else if (scenario === "execution-layout") {
+  const snapshot = await bridge.load();
+  snapshot.activeTurnId="ui-turn";
+  snapshot.turns=[{...snapshot.turns[0],status:"running",phase:"executing_tools",finishedAt:null}];
+  snapshot.timeline=snapshot.timeline.filter(item=>item.kind==="user");
+  snapshot.timeline.push(...["先检查目标页面和当前项目。","环境已准备好，正在整理抓取脚本。","解析检查通过，正在执行抓取并验证内容。"].map((text,index)=>({id:`progress-${index}`,kind:"assistant" as const,phase:"commentary" as const,taskId:"ui-a",turnId:"ui-turn",title:text,createdAt:updatedAt})));
+  snapshot.actions=Array.from({length:16},(_,index)=>({id:`step-${index}`,taskId:"ui-a",turnId:"ui-turn",kind:index===12?"write_file" as const:"run_command" as const,status:index===15?"running" as const:[7,11].includes(index)?"failed" as const:"applied" as const,title:"PRIVATE_COMMAND",detail:"PRIVATE_ARGUMENTS",result:null,diff:null,canUndo:false,createdAt:updatedAt}));
   createRoot(document.getElementById("root")!).render(<App bridge={new MemoryDesktopBridge(snapshot)} />);
 } else if (scenario === "operation-transitions") {
   createRoot(document.getElementById("root")!).render(<OperationOutcomeFixture />);

@@ -42,6 +42,8 @@ export function TaskTimeline({
   const [editError, setEditError] = useState<string>();
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState(200);
+  const [expandedExecutions,setExpandedExecutions] = useState<Record<string,boolean>>({});
+  const setExecutionExpanded = (turnId:string,expanded:boolean) => setExpandedExecutions(previous=>({...previous,[turnId]:expanded}));
   useEffect(() => setVisibleLimit(200), [entries.at(-1)?.taskId]);
   const visibleEntries = entries.slice(Math.max(0, entries.length - visibleLimit));
   const lastAssistantId = [...entries]
@@ -119,7 +121,7 @@ export function TaskTimeline({
     if (!turnId || lastVisibleEntryIdByTurn.get(turnId) !== entry.id || renderedProcessTurnIds.has(turnId)) return null;
     renderedProcessTurnIds.add(turnId);
     const turn = turnsById.get(turnId);
-    return <WorkProcess turnId={turnId} actions={actionsByTurn.get(turnId) ?? []}
+    return <WorkProcess turnId={turnId} actions={actionsByTurn.get(turnId) ?? []} historyExpanded={Boolean(expandedExecutions[turnId])} onHistoryToggle={expanded=>setExecutionExpanded(turnId,expanded)}
       evidence={readEvidenceByTurn.get(turnId) ?? []} phase={turn?.phase}
       startedAt={turn?.startedAt} outcome={turn?.status} childReport={turn?.childReport}
       failureMessage={entries.find((item) => item.turnId === turnId && item.kind === "error")?.detail}
@@ -136,7 +138,7 @@ export function TaskTimeline({
         if (!canRenderEntry(entry)) return null;
         return (
           <Fragment key={entry.id}>
-            <article className={`chat-message chat-${entry.kind}`}>
+            <article className={`chat-message chat-${entry.kind}${entry.phase === "commentary" ? " chat-commentary" : ""}`}>
               <div className="message-column">
                 {editingMessageId === entry.id ? (
                   <form
@@ -241,6 +243,8 @@ export function TaskTimeline({
           <WorkProcess
             key={turnId}
             turnId={turnId}
+            historyExpanded={Boolean(expandedExecutions[turnId])}
+            onHistoryToggle={expanded=>setExecutionExpanded(turnId,expanded)}
             actions={actionsByTurn.get(turnId) ?? []}
             evidence={readEvidenceByTurn.get(turnId) ?? []}
             phase={turnsById.get(turnId)?.phase}
@@ -295,7 +299,7 @@ function workProcessState(
   const childIssues = Boolean(childReport && (childReport.rejectedOperations > 0 || childReport.outcomes.some((child) => child.status !== "completed") || childReport.assignments?.some((item) => item.status !== "dispatched" || item.receivers.some((id) => !childReport.outcomes.some((child) => child.threadId === id)))));
   const needsReview = uncertain || (!running && !pending.length && (operationIssues || childIssues));
   const summary = failure ? "这次任务未能完成" : outcome === "cancelled" ? "任务已停止"
-    : uncertain ? "任务执行状态待确认，请勿重复发送" : pending.length ? "有操作需要你确认" : running ? (phase === "preparing_kernel" ? "正在连接执行内核，可停止…" : "正在处理任务…")
+    : uncertain ? "任务执行状态待确认，请勿重复发送" : pending.length ? "有操作需要你确认" : running ? (phase === "preparing_kernel" && actions.length === 0 && evidence.length === 0 ? "正在连接执行内核，可停止…" : "正在处理任务…")
     : operationIssues ? "处理已结束，有操作结果需要检查"
     : childIssues ? "处理已结束，有子任务结果需要检查"
     : actions.some((action) => action.status === "undone") ? "已撤销相关修改" : "处理已结束";
@@ -304,9 +308,11 @@ function workProcessState(
 
 function WorkProcess({
   turnId, actions, evidence, active, outcome, childReport, phase, startedAt, failureMessage, disabled, undoBlocked,
-  onApprove, onReject, onUndo, onCancel,
+  onApprove, onReject, onUndo, onCancel, historyExpanded, onHistoryToggle,
 }: {
   turnId: string;
+  historyExpanded: boolean;
+  onHistoryToggle: (expanded:boolean)=>void;
   actions: ToolActionSummary[];
   evidence: TimelineEntry[];
   active: boolean;
@@ -332,7 +338,8 @@ function WorkProcess({
   // Submission protection stays in the runtime/composer; omit this duplicate row.
   const showSummary = !uncertain && (running || pending.length > 0 || failure || needsReview
     || outcome === "cancelled" || actions.some((action) => action.status === "undone"));
-  if (!loadedSkills.length && !showSummary && !childReport && undoableActions.length === 0) return null;
+  const steps = actions.filter(action => action.status !== "pending");
+  if (!steps.length && !loadedSkills.length && !showSummary && !childReport && undoableActions.length === 0) return null;
   return (
     <section className="work-process-wrap" data-turn-id={turnId}>
       {loadedSkills.length > 0 && <p className="skill-read-evidence">已读取技能：{loadedSkills.join("、")}</p>}
@@ -343,6 +350,7 @@ function WorkProcess({
           {running && pending.length === 0 ? <ElapsedTime startedAt={startedAt} /> : null}
         </div>
       ) : null}
+      {steps.length > 0 ? <ExecutionHistory actions={steps} running={running} uncertain={uncertain} expanded={historyExpanded} onToggle={onHistoryToggle} /> : null}
       {failure ? <p className="user-task-notice">{toMessage(failureMessage)} 已完成的修改可能仍保留，请先检查当前项目。</p> : null}
       {outcome === "cancelled" ? <p className="user-task-notice">停止不会自动撤销已经完成的修改。</p> : null}
       {needsReview && failedOperations ? <p className="user-task-notice">执行过程中有操作未成功。后续尝试可能已解决问题，请结合最终回复检查修改并验证结果。</p> : null}
@@ -362,6 +370,41 @@ function WorkProcess({
       ))}
     </section>
   );
+}
+
+export function executionGroups(actions: ToolActionSummary[], running: boolean, uncertain: boolean) {
+  const groups: {id:string;kind:ToolActionSummary["kind"];status:string;count:number}[] = [];
+  for (const action of actions) {
+    const status = (!running || uncertain) && action.status === "running" ? "unknown" : action.status;
+    const previous = groups.at(-1);
+    if (previous?.kind === action.kind && previous.status === status) previous.count++;
+    else groups.push({id:action.id,kind:action.kind,status,count:1});
+  }
+  return groups;
+}
+
+function ExecutionHistory({actions,running,uncertain,expanded,onToggle}:{actions:ToolActionSummary[];running:boolean;uncertain:boolean;expanded:boolean;onToggle:(expanded:boolean)=>void}) {
+  // User-owned expansion: new deltas must not force the history open again.
+  const failed = actions.filter(action=>action.status==="failed").length;
+  const live = running && !uncertain ? actions.filter(action=>action.status==="running") : [];
+  const groups = executionGroups(actions,running,uncertain);
+  const commands = actions.filter(action=>action.kind==="run_command").length;
+  const changes = actions.length-commands;
+  return <details className="execution-steps" open={expanded} onToggle={event=>{if(event.currentTarget.open!==expanded)onToggle(event.currentTarget.open);}}>
+    <summary><span className="execution-chevron" aria-hidden="true">›</span><span className="execution-label">执行记录</span>
+      <span className="execution-count">{actions.length} 项操作</span>
+      {live.length ? <span className="execution-live"><span aria-hidden="true"/> {live.length} 项进行中</span> : null}
+      {failed ? <span className="execution-warning">{failed} 次未成功</span> : null}
+    </summary>
+    <div className="execution-history">
+      <div className="execution-overview">{[commands ? `${commands} 次命令调用` : "",changes ? `${changes} 次文件修改` : ""].filter(Boolean).join(" · ")}</div>
+      <div className="execution-groups">{groups.map(group=><div key={group.id} className="execution-group" data-status={group.status}>
+        <span className="execution-kind-icon" aria-hidden="true">{group.kind==="write_file"?"▧":">_"}</span>
+        <span>{group.kind==="write_file"?"修改文件":"执行命令"}{group.count>1?<small> × {group.count}</small>:null}</span>
+        <span className="execution-group-status">{group.status==="unknown"?"结果待确认":actionStatusLabels[group.status as ToolActionSummary["status"]]}</span>
+      </div>)}</div>
+    </div>
+  </details>;
 }
 
 export { MarkdownMessage } from "./MarkdownMessage";

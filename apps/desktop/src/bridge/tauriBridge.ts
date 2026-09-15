@@ -467,7 +467,7 @@ export class TauriDesktopBridge implements DesktopBridge {
         return;
       }
       if (payload.kind === "started") {
-        this.publish({ ...latest, activeTurnId: payload.taskId === latest.activeTaskId ? payload.turnId : latest.activeTurnId });
+        this.publish({ ...latest, turns: nativeExecutionStarted(latest.turns, payload.turnId), activeTurnId: payload.taskId === latest.activeTaskId ? payload.turnId : latest.activeTurnId });
         return;
       }
       if (payload.kind === "completion_pending" || payload.kind === "submission_pending" || payload.kind === "delegations_updated") {
@@ -517,6 +517,7 @@ export class TauriDesktopBridge implements DesktopBridge {
         const exists = current.actions.some((candidate) => candidate.id === action.id);
         this.publish({
           ...current,
+          turns: nativeExecutionStarted(current.turns, action.turnId),
           actions: exists
             ? current.actions.map((candidate) => candidate.id === action.id ? projected : candidate)
             : [...current.actions, projected],
@@ -532,10 +533,12 @@ export class TauriDesktopBridge implements DesktopBridge {
     const current = this.snapshot;
     if (!current || this.pendingDeltas.size === 0) return;
     let timeline = current.timeline;
+    let turns = current.turns;
     let activeTurnId = current.activeTurnId;
     for (const { payload, content } of this.pendingDeltas.values()) {
         const turn = current.turns.find((turn) => turn.id === payload.turnId);
         if (turn && turn.status !== "running") continue;
+        turns = nativeExecutionStarted(turns, payload.turnId);
         const id = payload.itemId ?? `${payload.turnId}-stream`;
         const existing = timeline.find((entry) => entry.id === id);
         if (existing && existing.status !== "streaming") continue;
@@ -563,7 +566,7 @@ export class TauriDesktopBridge implements DesktopBridge {
         if (payload.taskId === current.activeTaskId) activeTurnId = payload.turnId;
     }
     this.pendingDeltas.clear();
-    this.publish({ ...current, timeline, activeTurnId });
+    this.publish({ ...current, turns, timeline, activeTurnId });
   }
 
   private accept(backend: BackendSnapshot, preferredProjectId?: string): DesktopSnapshot {
@@ -581,6 +584,13 @@ export class TauriDesktopBridge implements DesktopBridge {
     if (!this.snapshot) throw new Error("桌面核心尚未完成初始化");
     return this.snapshot;
   }
+}
+
+// Native activity is evidence that connection preparation has ended. Preserve
+// submission recovery and terminal states; these signals do not resolve them.
+function nativeExecutionStarted(turns: TurnSummary[], turnId: string): TurnSummary[] {
+  return turns.map(turn => turn.id === turnId && turn.status === "running" && turn.phase === "preparing_kernel"
+    ? { ...turn, phase: "sampling" } : turn);
 }
 
 export function projectBackendSnapshot(

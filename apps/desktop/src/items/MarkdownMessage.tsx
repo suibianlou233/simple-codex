@@ -1,4 +1,5 @@
-import { Children, isValidElement, type ReactNode } from "react";
+import { Children, isValidElement, useContext, type ReactNode } from "react";
+import { FileOpenContext } from "../code/FileOpenContext";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import { StoredImage } from "../components/StoredImage";
 import remarkGfm from "remark-gfm";
@@ -15,11 +16,12 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 }
 
 export function MarkdownMessage({ content }: { content: string }) {
-  return <div className="markdown-message"><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={url => /^simple-image:[a-f0-9]{64}$/.test(url) ? url : defaultUrlTransform(url)} components={{
+  const openFile = useContext(FileOpenContext);
+  return <div className="markdown-message"><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={url => /^simple-image:[a-f0-9]{64}$/.test(url) || /^[a-z]:[\\/]/i.test(url) ? url : defaultUrlTransform(url)} components={{
     img: ({ src, alt }) => typeof src === "string" && /^simple-image:[a-f0-9]{64}$/.test(src) ? <StoredImage reference={src} name={alt ?? "图片"} /> : <span>{alt ?? "图片"}</span>,
     // Opening external destinations remains a bridge/product decision; never
     // turn model-generated paths into unrestricted browser navigation.
-    a: ({ children, href }) => <span className="markdown-link" title={href}>{children}</span>,
+    a: ({ children, href }) => openFile && href && !/^(https?:|mailto:|#|\/\/)/i.test(href) ? <button className="markdown-link code-file-link" title={href} onClick={()=>openFile(href)}>{children}</button> : <span className="markdown-link" title={href}>{children}</span>,
     pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   }}>{content}</ReactMarkdown></div>;
 }

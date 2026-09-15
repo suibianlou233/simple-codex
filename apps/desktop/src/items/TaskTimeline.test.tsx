@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TaskTimeline } from "./TaskTimeline";
+import { TaskTimeline, executionGroups } from "./TaskTimeline";
 import type { TimelineEntry, TurnSummary, ToolActionSummary } from "../bridge/types";
 
 const entry = (id: string, kind: TimelineEntry["kind"] = "assistant", turnId = "turn-1"): TimelineEntry =>
@@ -324,3 +324,24 @@ describe("user-facing conversation", () => {
     expect(render(entries,[turn("completed")],undefined,[action])).toContain("已读取技能：write-serialized-novel");
     expect(render(entries,[turn("completed")],undefined,[{...action,status:"failed"}])).not.toContain('class="skill-read-evidence"');
  });
+
+
+it("shows real execution steps during work and retains a folded history after completion", () => {
+  const action: ToolActionSummary = {id:"operation",taskId:"task-1",turnId:"turn-1",kind:"run_command",
+    status:"running",title:"统计小说字数",detail:"fixture command",diff:null,result:null,canUndo:false,createdAt:""};
+  const live = render([entry("request","user")],[{...turn("running"),phase:"preparing_kernel"}],"turn-1",[action]);
+    expect(live).toContain("执行命令");
+    expect(live).not.toContain('<details class="execution-steps" open');
+  expect(live).not.toContain("正在连接执行内核");
+  const ended = render([entry("request","user")],[turn("completed")],undefined,[{...action,status:"applied"}]);
+    expect(ended).toContain("执行命令");
+  expect(ended).toContain("已完成");
+  expect(ended).not.toContain('<details class="execution-steps" open');
+  });
+
+it("groups consecutive operations without merging failures or implying stale commands are running",()=>{
+  const base: ToolActionSummary={id:"a",taskId:"t",turnId:"turn",kind:"run_command",status:"applied",title:"PRIVATE_COMMAND",detail:"",result:null,diff:null,canUndo:false,createdAt:""};
+  const actions:ToolActionSummary[]=[base,{...base,id:"b"},{...base,id:"c",status:"failed"},{...base,id:"d"},{...base,id:"e",status:"running"}];
+  expect(executionGroups(actions,true,false).map(g=>[g.status,g.count])).toEqual([["applied",2],["failed",1],["applied",1],["running",1]]);
+  expect(executionGroups(actions,false,false).at(-1)?.status).toBe("unknown");
+});

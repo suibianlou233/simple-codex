@@ -1,0 +1,21 @@
+import { test, expect } from "@playwright/test";
+test("execution history stays compact and expands into ordered groups",async({page},info)=>{
+  await page.goto("/tests/ui/fixture.html?scenario=execution-layout");
+  const history=page.locator(".execution-steps");
+  await expect(history).not.toHaveAttribute("open","");
+  await expect(history.locator("summary")).toContainText("16 项操作");
+  await expect(history.locator("summary")).toContainText("2 次未成功");
+  await expect(history.locator("summary")).toContainText("1 项进行中");
+  await expect(page.locator(".execution-groups")).toBeHidden();
+  await expect(page.locator("body")).not.toContainText("PRIVATE_");
+  const notes=page.locator(".chat-commentary");
+  const first=await notes.nth(0).boundingBox();const second=await notes.nth(1).boundingBox();
+  expect(second!.y-(first!.y+first!.height)).toBeLessThanOrEqual(16);
+  await page.screenshot({path:info.outputPath("execution-compact.png")});
+  await history.locator("summary").click();
+  await expect(page.locator(".execution-groups")).toBeVisible();
+  await expect(page.locator(".execution-group")).toHaveCount(7);
+  await page.screenshot({path:info.outputPath("execution-expanded.png")});
+  await history.locator("summary").click();
+  await expect(history).not.toHaveAttribute("open","");
+});

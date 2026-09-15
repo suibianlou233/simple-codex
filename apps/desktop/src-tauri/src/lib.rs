@@ -52,6 +52,7 @@ pub fn run() -> tauri::Result<()> {
         .invoke_handler({
             let commands: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
                 runtime::load_snapshot,
+                runtime::editor::editor_list, runtime::editor::editor_search, runtime::editor::editor_read, runtime::editor::editor_save, runtime::editor::editor_create, runtime::editor::editor_rename,
                 runtime::skill_library::skills_library_list,
                 runtime::skill_library::skills_codex_list,
                 runtime::skill_library::skills_import,

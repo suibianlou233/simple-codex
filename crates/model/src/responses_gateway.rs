@@ -41,6 +41,19 @@ const SIMPLE_MODEL_GATEWAY_URL_ENV_VAR: &str = "SIMPLE_MODEL_GATEWAY_URL";
 const SIMPLE_MODEL_GATEWAY_TOKEN_ENV_VAR: &str = "SIMPLE_MODEL_GATEWAY_TOKEN";
 const SIMPLE_MODEL_ALIAS_ENV_VAR: &str = "SIMPLE_MODEL_ALIAS";
 
+// Apply on every request so persisted English conversations also receive the policy.
+const SIMPLE_LANGUAGE_POLICY: &str = "Simple 的界面交流语言为简体中文。你向用户生成的所有过程说明、进度更新、工具调用前后的说明、中断恢复说明、提问和最终回复，必须使用简体中文。即使历史消息、网页、工具结果或任务材料是英文，也不要跟随它们改用英文叙述。用户明确要求其他语言的创作或翻译内容时，只让该内容使用指定语言，外围说明仍使用简体中文。保留代码、命令、标识符、文件路径、网址和引用的原始报错，不要翻译或改写工具实际输出。";
+
+fn apply_language_policy(payload: &mut serde_json::Map<String, Value>) {
+    let existing = payload.get("instructions").and_then(Value::as_str).unwrap_or("");
+    let instructions = if existing.is_empty() {
+        SIMPLE_LANGUAGE_POLICY.to_owned()
+    } else {
+        format!("{existing}\n\n{SIMPLE_LANGUAGE_POLICY}")
+    };
+    payload.insert("instructions".to_owned(), Value::String(instructions));
+}
+
 #[path = "responses_gateway_routes.rs"]
 mod routes;
 
@@ -342,6 +355,7 @@ async fn forward_responses(
         }
         Err(_) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
     };
+    apply_language_policy(&mut payload);
     let upstream_model = request_model(&state.upstream_model, state.upstream_protocol, &payload);
     let tool_translation = if state.upstream_protocol == ResponsesGatewayUpstream::DeepSeekResponses
     {
@@ -556,6 +570,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn language_policy_covers_resumed_history_without_rewriting_content() {
+        for original in [Value::Null, json!("Keep approval boundaries.")] {
+            let mut payload = json!({
+                "instructions": original,
+                "input": [{"role":"assistant", "content":"Now finishing chapters 20–40"},
+                    {"type":"function_call_output", "call_id":"call_1", "output":"File not found: C:/test.txt"}]
+            }).as_object().unwrap().clone();
+            let input = payload["input"].clone();
+            apply_language_policy(&mut payload);
+            assert_eq!(payload["input"], input);
+            let instructions = payload["instructions"].as_str().unwrap();
+            assert!(instructions.ends_with(SIMPLE_LANGUAGE_POLICY));
+            if let Some(original) = original.as_str() {
+                assert!(instructions.starts_with(original));
+            }
+        }
+    }
+
+    #[test]
     fn qwen_visual_capabilities_are_model_specific() {
         for model in ["qwen3.8-max", "qwen3.8-flash", "qwen3.8-max-0902", "qwen3.8-max-2026-09-02"] {
             assert!(ResponsesGatewayConfig::new("http://localhost",model,None).with_chat_completions(ChatDialect::Qwen).supports_images());
@@ -672,6 +705,7 @@ mod tests {
         );
         let payload: Value = serde_json::from_slice(&body).expect("valid gateway JSON");
         assert_eq!(payload["model"], "real-model");
+        assert_eq!(payload["instructions"], SIMPLE_LANGUAGE_POLICY);
         (
             StatusCode::OK,
             [(
@@ -709,6 +743,7 @@ mod tests {
         let payload: Value = serde_json::from_slice(&body).expect("valid chat JSON");
         assert_eq!(payload["model"], "deepseek-chat");
         assert_eq!(payload["messages"][0]["role"], "system");
+        assert!(payload["messages"][0]["content"].as_str().unwrap().contains(SIMPLE_LANGUAGE_POLICY));
         assert_eq!(payload["messages"][1]["content"], "inspect");
         assert_eq!(payload["tools"][0]["function"]["name"], "read_file");
         assert_eq!(payload["thinking"]["type"], "disabled");

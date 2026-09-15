@@ -9,4 +9,4 @@
 - Read `docs/DEVELOPMENT.md` for the current source/build boundaries. Historical migration utilities are not the default launch path.
 
 
-- Workspace UI contains only Terminal and Browser, both in the resizable right sidebar. Terminal uses an interactive PTY; do not restore the command input/run form or the removed Files/Diff panels.
+- Simple conversation mode exposes Terminal and Browser in the resizable right sidebar. The user-approved Simple Code mode adds a project tree and text editor, with AI/Terminal/Browser on the right. Preserve conversation state and unsaved editor buffers on mode changes. Terminal uses an interactive PTY; do not restore the command input/run form or the removed whole-workspace Files/Diff snapshot panels.

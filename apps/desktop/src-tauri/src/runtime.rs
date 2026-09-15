@@ -1,3 +1,5 @@
+#[path = "editor.rs"]
+pub(crate) mod editor;
 use std::collections::{HashMap, HashSet, VecDeque};
 #[path = "task_lifecycle.rs"]
 pub(crate) mod task_lifecycle;
@@ -7739,7 +7741,7 @@ fn resolve_codex_selection(resource_directory: &Path) -> Result<KernelSelection,
         // Distribution builds use their own immutable package, not developer
         // environment variables or a neighbouring legacy executable.
         let package = KernelPackage::load(
-            &resource_directory.join("kernels/official-283-windows-candidate-1/kernel.json"),
+            &resource_directory.join(kernel_desktop::BUNDLED_MANIFEST),
         )
         .map_err(|error| DesktopError::KernelSelection(error.to_string()))?;
         let selection = KernelSelection::Package(package);

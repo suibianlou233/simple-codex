@@ -40,7 +40,8 @@ SOFTWARE.
 
 Simple uses the unmodified `process-wrap` 10.0.0 crate for managed command and
 native-kernel process lifetimes. The model host now directly uses the existing
-locked dependency with Tokio, Job Object, KillOnDrop and CreationFlags support.
+locked dependency with Tokio, Job Object, KillOnDrop, CreationFlags and Unix
+ProcessGroup support.
 Source: https://github.com/watchexec/process-wrap . Cargo.lock records the
 crates.io checksum `0e3f4237d0e4741eb50bc5584db701f1299c85fa31ff0274dd6445e79dc42d12`.
 The Apache-2.0 license option applies; a copy is provided in `LICENSE`.
@@ -266,3 +267,37 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
+
+## CodeMirror 6 editor (2026-09-15)
+
+Simple Code uses the unmodified MIT-licensed CodeMirror 6 editor and its
+JavaScript/TypeScript, JSON, Python, Rust, HTML, CSS and Markdown language packages.
+Source: https://github.com/codemirror . `apps/desktop/pnpm-lock.yaml` pins the exact
+registry versions and integrity hashes, including Lezer transitive dependencies.
+No upstream source or brand assets were copied. The existing release license
+collector recursively includes installed production packages and their LICENSE
+files; release builds must run it after installing this lockfile.
+
+CodeMirror notice:
+
+MIT License
+
+Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

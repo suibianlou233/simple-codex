@@ -59,6 +59,7 @@ export function PermissionSelector({
 }) {
   const [pending, setPending] = useState<PermissionLevel>();
   const [isChanging, setIsChanging] = useState(false);
+  const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const controlRef = useRef<HTMLDivElement>(null);
   const current = permissionOptions.find((option) => option.value === value) ?? permissionOptions[0];
@@ -154,15 +155,15 @@ export function PermissionSelector({
                     <strong>{option.title}</strong>
                     <small>{option.summary}</small>
                   </span>
-                  {unavailable ? <em>沙箱未安装</em> : selected ? <em>当前</em> : null}
+                  {unavailable ? <em>{mac ? "暂不支持" : "沙箱未安装"}</em> : selected ? <em>当前</em> : null}
                 </button>
               );
             })}
           </div>
           {!workspaceSandboxReady ? (
             <div className="permission-availability" role="status">
-              <span>二级权限需要先安装本机项目沙箱。</span>
-              {onInstallSandbox ? (
+              <span>{mac ? "Mac 的项目自动模式尚待验证，请使用逐项确认。" : "二级权限需要先安装本机项目沙箱。"}</span>
+              {onInstallSandbox && !mac ? (
                 <button
                   type="button"
                   disabled={isChanging}

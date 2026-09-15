@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AgentSettings,
   Composer,
@@ -212,17 +212,28 @@ describe("toMessage", () => {
     expect(systemMarkup).toContain("可操作这台电脑");
     expect(systemMarkup).toContain("任务运行时不可切换");
 
-    const unavailableMarkup = renderToStaticMarkup(
-      createElement(PermissionSelector, {
-        value: "approval",
-        disabled: false,
-        defaultOpen: true,
-        workspaceSandboxReady: false,
-        onChange: async () => true,
-      }),
-    );
-    expect(unavailableMarkup).toContain("沙箱未安装");
-    expect(unavailableMarkup).toContain("二级权限需要先安装本机项目沙箱");
+  });
+
+  it.each(["Win32", "MacIntel"])("keeps unavailable sandbox permissions disabled on %s", platform => {
+    vi.stubGlobal("navigator", { platform });
+    try {
+      const markup = renderToStaticMarkup(createElement(PermissionSelector, {
+        value: "approval", disabled: false, defaultOpen: true,
+        workspaceSandboxReady: false, onChange: async () => true,
+        onInstallSandbox: async () => true,
+      }));
+      expect(markup).toMatch(/role="radio" aria-checked="false" disabled=""/);
+      if (platform === "MacIntel") {
+        expect(markup).toContain("Mac 的项目自动模式尚待验证");
+        expect(markup).not.toContain("安装沙箱");
+      } else {
+        expect(markup).toContain("沙箱未安装");
+        expect(markup).toContain("二级权限需要先安装本机项目沙箱");
+        expect(markup).toContain("安装沙箱");
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps an explicitly selected permission when starting the next conversation", () => {

@@ -25,6 +25,10 @@ import { toMessage } from "./feedback";
 import { TerminalPanel } from "../panels/WorkspacePanels";
 import type { TextDocument } from "../items/UserMessage";
 import { CopyButton } from "../components/CopyButton";
+import { WindowControls } from "../components/WindowControls";
+import { CodeWorkspace } from "../code/CodeWorkspace";
+import { projectRelativePath } from "../code/editorModel";
+import { FileOpenContext } from "../code/FileOpenContext";
 import {
   applyResolvedTheme,
   persistThemePreference,
@@ -65,6 +69,17 @@ export function WorkspaceNavigation({ terminalOpen, browserOpen, onTerminalToggl
 
 export function App({ bridge = desktopBridge }: AppProps) {
   const { snapshot, error: projectionError } = useDesktopProjection(bridge);
+  const [modes, setModes] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("simple.ui.projectModes") ?? "{}"); } catch { return {}; }
+  });
+  const modeKey = snapshot?.activeProjectId ?? "welcome";
+  const codeMode = modes[modeKey] === "code";
+  const setCodeMode = (enabled: boolean) => setModes(previous => {
+    const next = {...previous, [modeKey]: enabled ? "code" : "simple"};
+    localStorage.setItem("simple.ui.projectModes", JSON.stringify(next)); return next;
+  });
+  const [fileRequest, setFileRequest] = useState<{path:string;nonce:number;projectId:string}>();
+  const [editorModalOpen, setEditorModalOpen] = useState(false);
   const [isNewConversation, setIsNewConversation] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [isSkillsOpen, setIsSkillsOpen] = useState(false);
@@ -245,9 +260,33 @@ export function App({ bridge = desktopBridge }: AppProps) {
   }
 
   return (
+    <FileOpenContext.Provider value={activeProject ? href => {
+      const path = projectRelativePath(href, activeProject.path);
+      if (path) {setCodeMode(true);setFileRequest({path,nonce:Date.now(),projectId:activeProject.id});}
+    } : undefined}>
     <AttachmentProjectContext.Provider value={activeProject?.id}>
     {mediaAvailable ? <BrowserApproval onVisibilityChange={setBrowserApprovalOpen} taskNames={Object.fromEntries(snapshot.tasks.map(task => [task.id, task.title]))} /> : null}
-    <main style={{"--right-panel-width": `${visiblePanelWidth}px`} as CSSProperties} className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${browserOpen && activeProject ? " has-browser" : ""}${textDocument || (browserOpen && activeProject) || (terminalOpen && activeTask) ? " has-right-panel" : ""}${resizingPanel ? " is-resizing-panel" : ""}`}>
+    <main style={{"--right-panel-width": `${visiblePanelWidth}px`} as CSSProperties} className={`app-shell has-mode-bar${codeMode ? " code-mode" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${browserOpen && activeProject ? " has-browser" : ""}${textDocument || (browserOpen && activeProject) || (terminalOpen && activeTask) ? " has-right-panel" : ""}${resizingPanel ? " is-resizing-panel" : ""}`}>
+      <div className="simple-mode-bar" data-tauri-drag-region>
+        <select aria-label="工作模式" value={codeMode ? "code" : "simple"} onChange={event=>setCodeMode(event.target.value==="code")}><option value="simple">Simple</option><option value="code">Simple Code</option></select>
+        {codeMode ? <>
+          <select aria-label="当前项目" value={activeProject?.id ?? ""} onChange={event=>void run(async()=>{await bridge.selectProject(event.target.value);setIsNewConversation(true);})}><option value="" disabled>选择项目</option>{snapshot.projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select>
+          <button onClick={()=>void run(async()=>{await bridge.openProject();setIsNewConversation(true);})}>打开文件夹</button>
+          <select aria-label="当前对话" value={activeTask?.id ?? ""} onChange={event=>{if(!event.target.value)beginNewConversation();else void run(async()=>{await bridge.selectTask(event.target.value);setIsNewConversation(false);});}}><option value="">新对话</option>{snapshot.tasks.filter(task=>task.projectId===activeProject?.id).map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select>
+          <button onClick={beginNewConversation}>＋ 新对话</button>
+          <span className="window-drag-spacer" data-tauri-drag-region aria-hidden="true"/>
+          <nav className="code-tools" aria-label="右侧工具"><button aria-pressed={!terminalOpen&&!browserOpen&&!textDocument} onClick={()=>{setTerminalOpen(false);setBrowserOpen(false);setTextDocument(undefined);}}>AI</button><WorkspaceNavigation terminalOpen={terminalOpen} browserOpen={browserOpen} terminalDisabled={!activeTask} browserDisabled={!activeProject||!mediaAvailable} onTerminalToggle={()=>{setTextDocument(undefined);setBrowserOpen(false);setTerminalOpen(v=>!v);}} onBrowserToggle={()=>{setTextDocument(undefined);setTerminalOpen(false);setBrowserOpen(v=>!v);}}/></nav>
+        </> : <><span data-tauri-drag-region>{activeProject?.name ?? "本地工作区"}</span><span className="window-drag-spacer" data-tauri-drag-region aria-hidden="true"/></>}
+        <WindowControls onError={setError}/>
+      </div>
+      <CodeWorkspace project={activeProject} visible={codeMode} dark={resolvedTheme==="dark"} request={fileRequest?.projectId===activeProject?.id?fileRequest:undefined} onModalVisibility={setEditorModalOpen}
+        onOpenProject={()=>void run(async()=>{await bridge.openProject();setIsNewConversation(true);})}
+        onAttach={text=>{setDrafts(all=>{const current=all[currentDraftKey];return {...all,[currentDraftKey]:{content:current?.content??"",attachments:current?.attachments??[],pastes:[...(current?.pastes??[]),{id:crypto.randomUUID(),text}]}};});setTerminalOpen(false);setBrowserOpen(false);setTextDocument(undefined);}}/>
+      {codeMode ? <div className="code-panel-resizer" role="separator" aria-label="调整 AI 侧栏宽度" aria-orientation="vertical" tabIndex={0}
+        onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);setResizingPanel(true);}}
+        onPointerMove={event=>{if(event.currentTarget.hasPointerCapture(event.pointerId))resizePanel(window.innerWidth-event.clientX);}}
+        onPointerUp={event=>{event.currentTarget.releasePointerCapture(event.pointerId);setResizingPanel(false);}}
+        onLostPointerCapture={()=>setResizingPanel(false)} onKeyDown={event=>{if(event.key==="ArrowLeft"||event.key==="ArrowRight"){event.preventDefault();resizePanel(visiblePanelWidth+(event.key==="ArrowLeft"?24:-24));}}}/> : null}
       {!sidebarCollapsed ? <Sidebar snapshot={snapshot} activeTaskId={activeTask?.id} busy={isBusy}
         operationError={error}
         onArchive={(task, archived) => run(async () => { await bridge.setTaskArchived(task.id, archived); setNotice(archived ? "对话已归档" : "对话已恢复"); })}
@@ -271,7 +310,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
       <section className={`workspace${activeTask ? "" : " workspace-welcome"}`}>
         <header className="workspace-header">
           <div className="workspace-heading">
-            {sidebarCollapsed ? <button className="icon-button" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧栏" title="展开侧栏（Ctrl+B）"><Icon name="sidebar" /></button> : null}
+            {sidebarCollapsed ? <button className="icon-button" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧栏" title="展开侧栏（Ctrl/⌘+B）"><Icon name="sidebar" /></button> : null}
             <span className={`workspace-status${activeTask ? ` status-${activeTask.status}` : ""}`} aria-hidden="true" />
             <div>
               <strong title={activeTask?.title}>{activeTask?.title ?? (activeProject ? "新对话" : "Simple")}</strong>
@@ -483,7 +522,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
           <pre tabIndex={0} aria-label="正文全文">{textDocument.text}</pre>
         </section> : null}
         {activeProject && browserOpen ? <BrowserPanel key={activeProject.id} projectId={activeProject.id}
-          suspended={isSettingsOpen || isGuideOpen || isSkillsOpen || isAgentSettingsOpen || searchOpen || browserApprovalOpen || resizingPanel}
+          suspended={isSettingsOpen || isGuideOpen || isSkillsOpen || isAgentSettingsOpen || searchOpen || browserApprovalOpen || resizingPanel || editorModalOpen}
           onClose={()=>setBrowserOpen(false)}
           onAttach={attachment => setAttachments(current => current.some(item => item.path === attachment.path) ? current : [...current, attachment])} /> : null}
         {terminalTasks.map(taskId => <div key={taskId} className="terminal-slot" hidden={!terminalOpen || taskId !== activeTask?.id}>
@@ -543,5 +582,6 @@ export function App({ bridge = desktopBridge }: AppProps) {
       ) : null}
     </main>
     </AttachmentProjectContext.Provider>
+    </FileOpenContext.Provider>
   );
 }
