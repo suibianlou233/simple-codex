@@ -31,3 +31,6 @@
 *.dmg
 *.app/
 
+
+**/__pycache__/
+*.pyc

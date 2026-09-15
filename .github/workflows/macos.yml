@@ -32,6 +32,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --global pnpm@10.15.1
+      - run: python3 -m unittest discover -s scripts -p test_macos_kernel.py
       - run: pnpm install --frozen-lockfile && pnpm build && pnpm test
         working-directory: apps/desktop
       - run: cargo check --locked -p local-agent-desktop
