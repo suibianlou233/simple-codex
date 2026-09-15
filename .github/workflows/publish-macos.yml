@@ -85,7 +85,13 @@ jobs:
                   if len(files) != 1 or files[0].is_symlink():
                       raise SystemExit(f'Expected one regular {arch} {suffix} bundle')
                   shutil.copyfile(files[0], out / f'Simple-macos-{arch}-unsigned{suffix}')
-          checksums = ''.join(f'{hashlib.file_digest(p.open("rb"), "sha256").hexdigest()}  {p.name}\n'
+          def digest(p):
+              result = hashlib.sha256()
+              with p.open('rb') as stream:
+                  for block in iter(lambda: stream.read(1024 * 1024), b''):
+                      result.update(block)
+              return result.hexdigest()
+          checksums = ''.join(f'{digest(p)}  {p.name}\n'
                               for p in sorted(out.iterdir()))
           (out / 'Simple-macos-SHA256SUMS.txt').write_text(checksums)
           (out / 'Simple-macos-build.txt').write_text(
