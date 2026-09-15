@@ -220,7 +220,7 @@ describe("toMessage", () => {
       const markup = renderToStaticMarkup(createElement(PermissionSelector, {
         value: "approval", disabled: false, defaultOpen: true,
         workspaceSandboxReady: false, onChange: async () => true,
-        onInstallSandbox: async () => {},
+        onInstallSandbox: async () => true,
       }));
       expect(markup).toMatch(/role="radio" aria-checked="false" disabled=""/);
       if (platform === "MacIntel") {
