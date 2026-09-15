@@ -7,9 +7,13 @@ import { execFileSync } from 'node:child_process';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const output = path.join(root, 'target', 'release-licenses');
+const target = process.platform === 'darwin'
+  ? ({arm64: 'aarch64-apple-darwin', x64: 'x86_64-apple-darwin'})[process.arch]
+  : process.platform === 'win32' && process.arch === 'x64' ? 'x86_64-pc-windows-msvc' : undefined;
+if (!target) throw new Error('Unsupported license collection platform');
 fs.mkdirSync(output, { recursive: true });
 const notices = ['# Locked dependency license notices', '',
-  'Generated from local Cargo metadata (Windows, including build/development dependencies)',
+  `Generated from local Cargo metadata (${target}, including build/development dependencies)`,
   'and installed frontend production dependencies. This is a conservative inventory,',
   'not a claim that every listed dependency is present in the shipped executable.',
   'Pinned Codex provenance and license notices are supplied separately.', ''];
@@ -38,7 +42,7 @@ function add(ecosystem, name, version, expression, directory) {
 function collectCargo(directory) {
   const cargo = JSON.parse(execFileSync('cargo', [
     'metadata', '--locked', '--offline', '--format-version', '1',
-    '--filter-platform', 'x86_64-pc-windows-msvc'
+    '--filter-platform', target
   ], { cwd: directory, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
   for (const pkg of cargo.packages.filter(p => p.source).sort((a, b) => a.name.localeCompare(b.name))) {
     if (seenCargo.has(pkg.id)) continue;
@@ -72,4 +76,5 @@ function visit(packageFile) {
 visit(path.join(root, 'apps', 'desktop', 'package.json'));
 fs.writeFileSync(path.join(output, 'DEPENDENCY_LICENSES.md'), notices.join('\n'));
 fs.writeFileSync(path.join(output, 'dependency-inventory.json'), JSON.stringify(inventory, null, 2) + '\n');
+for (const file of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) fs.copyFileSync(path.join(root, file), path.join(output, file));
 console.log(JSON.stringify({ packages: inventory.length, missingRootNotices: inventory.filter(p => !p.noticeFiles.length).map(p => `${p.ecosystem}:${p.name}@${p.version}`), output }, null, 2));

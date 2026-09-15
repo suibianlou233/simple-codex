@@ -5,6 +5,7 @@
     "macOS": { "minimumSystemVersion": "14.0" },
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"],
     "resources": {
+      "../../../target/release-licenses/": "licenses/",
       "../../../kernels/packages/official-283-macos-candidate-1/": "kernels/official-283-macos-candidate-1/"
     }
   }

@@ -91,3 +91,8 @@ Pop-Location
 ```
 
 UI checks use local fixtures, not real model credentials. Some integration tests need a separately configured kernel and are ignored by default. The existing memory-panel capability-loading case is a known failure; see the README limitations. A successful build is not complete functional or security acceptance.
+
+## macOS adaptation preview / Mac 适配预览
+
+Mac 14+ 的 Apple Silicon / Intel 适配见 [Mac 架构决策与构建说明](ADR-20260915-macos.md)。
+Mac 使用独立内核构建与资源清单；不能复制 Windows 的 exe。截图与项目自动模式仍有限制，尚不是正式 Mac 发布版。

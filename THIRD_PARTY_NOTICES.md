@@ -40,7 +40,8 @@ SOFTWARE.
 
 Simple uses the unmodified `process-wrap` 10.0.0 crate for managed command and
 native-kernel process lifetimes. The model host now directly uses the existing
-locked dependency with Tokio, Job Object, KillOnDrop and CreationFlags support.
+locked dependency with Tokio, Job Object, KillOnDrop, CreationFlags and Unix
+ProcessGroup support.
 Source: https://github.com/watchexec/process-wrap . Cargo.lock records the
 crates.io checksum `0e3f4237d0e4741eb50bc5584db701f1299c85fa31ff0274dd6445e79dc42d12`.
 The Apache-2.0 license option applies; a copy is provided in `LICENSE`.
