@@ -1,7 +1,15 @@
 //! Desktop ownership for the official-kernel preview. Never migrate old tasks.
 use super::*;
 
+#[cfg(not(target_os = "macos"))]
 pub(crate) const PREVIEW_NOTICE: &str = "官方 28327355 内核预览：自动长期记忆/遗忘未迁移；同一任务更换模型后需重启。Windows 复合命令失败判定及 V8 内部防护仍有已知差异。此实例使用独立数据，不是旧版的完整等价替换。";
+
+#[cfg(target_os = "macos")]
+pub(crate) const PREVIEW_NOTICE: &str = "Mac 内核适配预览：自动长期记忆/遗忘未迁移；同一任务更换模型后需重启。浏览器截图暂不支持。此实例使用独立数据；Mac 实机沙箱与完整开发闭环尚待验收。";
+#[cfg(target_os = "macos")]
+pub(crate) const BUNDLED_MANIFEST: &str = "kernels/official-283-macos-candidate-1/kernel.json";
+#[cfg(not(target_os = "macos"))]
+pub(crate) const BUNDLED_MANIFEST: &str = "kernels/official-283-windows-candidate-1/kernel.json";
 
 pub(crate) struct Startup {
     pub data: PathBuf,
@@ -78,11 +86,14 @@ mod tests {
     fn bundled_package_selects_isolated_data_and_rejects_corruption() {
         let root = tempfile::tempdir().expect("fixture");
         let resources = root.path().join("resources");
-        let relative = "kernels/official-283-windows-candidate-1";
+        let relative = Path::new(BUNDLED_MANIFEST)
+            .parent()
+            .expect("package directory");
         let destination = resources.join(relative);
         std::fs::create_dir_all(&destination).expect("resources");
         let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../kernels/packages/official-283-windows-candidate-1");
+            .join("../../../kernels/packages")
+            .join(relative.file_name().expect("package name"));
         for entry in std::fs::read_dir(&source).expect("fixed package") {
             let entry = entry.expect("package entry");
             std::fs::copy(entry.path(), destination.join(entry.file_name())).expect("copy fixture");

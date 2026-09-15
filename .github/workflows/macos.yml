@@ -1,0 +1,71 @@
+name: macOS adaptation
+on:
+  push:
+    branches: [macos-adaptation]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Build pinned kernel and unsigned test app (no release publication)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      # This is a compile check, not a runnable bundle. The packaging job below
+      # must build and verify the actual resource package.
+      TAURI_CONFIG: '{"bundle":{"resources":[]}}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global pnpm@10.15.1
+      - run: pnpm install --frozen-lockfile && pnpm build && pnpm test
+        working-directory: apps/desktop
+      - run: cargo check --locked -p local-agent-desktop
+      - run: cargo test --locked -p local-agent-model kernel_compat::package::tests
+  package:
+    if: github.event_name == 'workflow_dispatch' && inputs.package
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_RELEASE_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global pnpm@10.15.1
+      - run: python3 scripts/build-macos-kernel.py
+      - run: pnpm install --frozen-lockfile
+        working-directory: apps/desktop
+      - run: pnpm tauri build --features bundled-official-kernel -- --locked
+        working-directory: apps/desktop
+      - run: cargo test --locked -p local-agent-desktop --features bundled-official-kernel bundled_package_selects_isolated_data_and_rejects_corruption
+      - run: tar -czf Simple-${{ matrix.runner }}.tar.gz -C target/release/bundle/macos Simple.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Simple-${{ matrix.runner }}-unsigned-preview
+          path: |
+            Simple-*.tar.gz
+            target/release/bundle/dmg/*.dmg
+          if-no-files-found: error

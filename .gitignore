@@ -27,4 +27,7 @@
 /.codex/
 /test-results/
 /playwright-report/
+/kernels/packages/official-283-macos-candidate-1/
+*.dmg
+*.app/
 

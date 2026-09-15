@@ -92,15 +92,9 @@ impl KernelPackage {
                 "需要已实现并验证的版本适配器",
             ));
         }
-        let target = if cfg!(all(windows, target_arch = "x86_64")) {
-            "x86_64-pc-windows-msvc"
-        } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-            "x86_64-unknown-linux-gnu"
-        } else {
-            return Err(KernelPackageError::Incompatible("尚未登记的平台"));
-        };
+        let target = host_target().ok_or(KernelPackageError::Incompatible("尚未登记的平台"))?;
         if manifest.target != target
-            || (candidate && !cfg!(windows))
+            || (candidate && !cfg!(any(windows, target_os = "macos")))
             || manifest.id.is_empty()
             || manifest.id.len() > 100
             || !manifest
@@ -220,6 +214,16 @@ impl KernelPackage {
     }
 }
 
+fn host_target() -> Option<&'static str> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("windows", "x86_64") => Some("x86_64-pc-windows-msvc"),
+        ("macos", "aarch64") => Some("aarch64-apple-darwin"),
+        ("macos", "x86_64") => Some("x86_64-apple-darwin"),
+        ("linux", "x86_64") => Some("x86_64-unknown-linux-gnu"),
+        _ => None,
+    }
+}
+
 fn binary(stem: &str) -> String {
     if cfg!(windows) {
         format!("{stem}.exe")
@@ -316,12 +320,7 @@ mod tests {
             adapter: ADAPTER.into(),
             data_contract: DATA_CONTRACT.into(),
             provenance: "legacy-modified-import".into(),
-            target: if cfg!(windows) {
-                "x86_64-pc-windows-msvc"
-            } else {
-                "x86_64-unknown-linux-gnu"
-            }
-            .into(),
+            target: host_target().expect("test platform").into(),
             capabilities: CAPABILITIES.iter().map(|s| (*s).into()).collect(),
             files,
         };
@@ -332,6 +331,25 @@ mod tests {
 
     fn write_manifest(path: &Path, manifest: &Manifest) {
         fs::write(path, serde_json::to_vec(manifest).expect("json")).expect("manifest");
+    }
+
+    #[test]
+    fn package_rejects_every_other_architecture() {
+        let (_root, path, original) = fixture();
+        for target in [
+            "x86_64-pc-windows-msvc",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "x86_64-unknown-linux-gnu",
+        ] {
+            let mut manifest = original.clone();
+            manifest.target = target.into();
+            write_manifest(&path, &manifest);
+            assert_eq!(
+                KernelPackage::load(&path).is_ok(),
+                Some(target) == host_target()
+            );
+        }
     }
 
     #[test]
@@ -392,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn candidate_package_never_claims_desktop_compatibility() {
         let (_root, path, mut m) = fixture();
         m.adapter = CANDIDATE_ADAPTER.into();
