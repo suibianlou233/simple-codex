@@ -35,7 +35,8 @@ jobs:
       - run: pnpm install --frozen-lockfile && pnpm build && pnpm test
         working-directory: apps/desktop
       - run: cargo check --locked -p local-agent-desktop
-      - run: cargo test --locked -p local-agent-model kernel_compat::package::tests
+      - run: cargo test --locked --lib -p local-agent-model kernel_compat::package::tests
+      - run: cargo test --locked --lib -p local-agent-model kernel_compat::codex_process::unix_tests
   package:
     if: github.event_name == 'workflow_dispatch' && inputs.package
     needs: check
@@ -61,6 +62,7 @@ jobs:
       - run: pnpm tauri build --features bundled-official-kernel -- --locked
         working-directory: apps/desktop
       - run: cargo test --locked -p local-agent-desktop --features bundled-official-kernel bundled_package_selects_isolated_data_and_rejects_corruption
+      - run: python3 scripts/verify-macos-bundle.py target/release/bundle/macos/Simple.app
       - run: tar -czf Simple-${{ matrix.runner }}.tar.gz -C target/release/bundle/macos Simple.app
       - uses: actions/upload-artifact@v4
         with:

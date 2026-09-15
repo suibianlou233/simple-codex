@@ -393,12 +393,17 @@ async fn execute(
         if request.action != "open" {
             return Err(err("请先打开当前项目的网页"));
         }
-        let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-            .map_err(|_| err("浏览器端口不可用"))?;
-        let port = listener
-            .local_addr()
-            .map_err(|_| err("浏览器端口不可用"))?
-            .port();
+        #[cfg(windows)]
+        let port = {
+            let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                .map_err(|_| err("浏览器端口不可用"))?;
+            listener
+                .local_addr()
+                .map_err(|_| err("浏览器端口不可用"))?
+                .port()
+        };
+        #[cfg(not(windows))]
+        let port = 0;
         sessions.insert(
             key.clone(),
             BrowserSession {
@@ -408,7 +413,6 @@ async fn execute(
                 navigation_origin: Arc::new(Mutex::new(None)),
             },
         );
-        drop(listener);
     }
     let session = sessions
         .get_mut(&key)

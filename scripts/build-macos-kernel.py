@@ -47,6 +47,7 @@ def main():
         if run("lipo", "-archs", str(built)) != platform.machine():
             raise SystemExit("Unexpected binary architecture: " + binary)
         shutil.copy2(built, output / binary)
+        subprocess.run(["codesign", "--force", "--sign", "-", str(output / binary)], check=True)
     for notice in ("LICENSE", "NOTICE"):
         shutil.copy2(source / notice, output / notice)
     (output / "changes.patch").write_bytes(b"")

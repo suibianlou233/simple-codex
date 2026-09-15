@@ -5,7 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 
 export function TerminalPanel({ taskId, onClose }: { bridge: DesktopBridge; taskId: string; onClose: () => void }) {
   const host = useRef<HTMLDivElement>(null);
-  const [cwd, setCwd] = useState("PowerShell");
+  const [cwd, setCwd] = useState("本地终端");
   const [generation, setGeneration] = useState(0);
   const [ended, setEnded] = useState(false);
   const [error, setError] = useState<string>();
@@ -20,7 +20,7 @@ export function TerminalPanel({ taskId, onClose }: { bridge: DesktopBridge; task
     void (async () => {
       const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]);
       if (disposed || !host.current) return;
-      const terminal = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, monospace', scrollback: 5000, theme: { background: "#171a19", foreground: "#e2e7e4", cursor: "#e2e7e4" } });
+      const terminal = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, Menlo, monospace', scrollback: 5000, theme: { background: "#171a19", foreground: "#e2e7e4", cursor: "#e2e7e4" } });
       const fit = new FitAddon();
       terminal.loadAddon(fit); terminal.open(host.current);
       const resize = () => { if (host.current && host.current.clientWidth > 0 && host.current.clientHeight > 0) fit.fit(); };
@@ -33,11 +33,14 @@ export function TerminalPanel({ taskId, onClose }: { bridge: DesktopBridge; task
         for (const chunk of data.match(/.{1,4096}/gsu) ?? []) writes = writes.then(() => invoke<void>("pty_write", { id: session, data: chunk })).catch(fail);
       });
       const dimensions = terminal.onResize(({ cols, rows }) => { if (id) void invoke("pty_resize", { id, cols, rows }).catch(fail); });
+      const mac = /Mac/.test(navigator.platform);
       terminal.attachCustomKeyEventHandler(event => {
-        if (event.type === "keydown" && event.ctrlKey && event.key.toLowerCase() === "c" && terminal.hasSelection()) {
+        const copyModifier = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey;
+        const pasteModifier = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && event.shiftKey;
+        if (event.type === "keydown" && copyModifier && event.key.toLowerCase() === "c" && terminal.hasSelection()) {
           void navigator.clipboard.writeText(terminal.getSelection()).catch(fail); return false;
         }
-        if (event.type === "keydown" && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
+        if (event.type === "keydown" && pasteModifier && event.key.toLowerCase() === "v") {
           void navigator.clipboard.readText().then(text => { if (!disposed) terminal.paste(text); }).catch(fail); return false;
         }
         return true;

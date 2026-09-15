@@ -271,7 +271,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
       <section className={`workspace${activeTask ? "" : " workspace-welcome"}`}>
         <header className="workspace-header">
           <div className="workspace-heading">
-            {sidebarCollapsed ? <button className="icon-button" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧栏" title="展开侧栏（Ctrl+B）"><Icon name="sidebar" /></button> : null}
+            {sidebarCollapsed ? <button className="icon-button" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧栏" title="展开侧栏（Ctrl/⌘+B）"><Icon name="sidebar" /></button> : null}
             <span className={`workspace-status${activeTask ? ` status-${activeTask.status}` : ""}`} aria-hidden="true" />
             <div>
               <strong title={activeTask?.title}>{activeTask?.title ?? (activeProject ? "新对话" : "Simple")}</strong>

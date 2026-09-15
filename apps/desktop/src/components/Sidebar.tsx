@@ -26,7 +26,7 @@ export function Sidebar(props: Props) {
   const lifecycleDisabled = busy || snapshot.turns.some(turn => turn.status === "running");
   return <aside className="sidebar" aria-label="项目与任务">
     <div className="sidebar-brand"><SimpleMark /><strong>Simple</strong><span className="brand-tag">本地</span>
-      <button className="icon-button" onClick={props.onCollapse} title="收起侧栏（Ctrl+B）" aria-label="收起侧栏"><Icon name="sidebar" /></button>
+      <button className="icon-button" onClick={props.onCollapse} title="收起侧栏（Ctrl/⌘+B）" aria-label="收起侧栏"><Icon name="sidebar" /></button>
     </div>
     <nav className="primary-nav" aria-label="主要操作">
       <button disabled={busy || !snapshot.activeProjectId} onClick={props.onNew}><Icon name="plus" /><span>新任务</span><kbd>Ctrl N</kbd></button>
