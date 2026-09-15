@@ -9,6 +9,7 @@ use tauri::Manager;
 pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()
         .manage(runtime::browser::BrowserState::default())
+        .manage(runtime::skill_library::SkillState::default())
         .manage(runtime::interactive_terminal::PtyState::default())
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
@@ -51,6 +52,13 @@ pub fn run() -> tauri::Result<()> {
         .invoke_handler({
             let commands: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
                 runtime::load_snapshot,
+                runtime::skill_library::skills_library_list,
+                runtime::skill_library::skills_codex_list,
+                runtime::skill_library::skills_import,
+                runtime::skill_library::skills_set_enabled,
+                runtime::skill_library::skills_document,
+                runtime::task_lifecycle::set_task_archived,
+                runtime::task_lifecycle::delete_task,
                 runtime::install_workspace_sandbox,
                 runtime::load_action,
                 runtime::open_project,

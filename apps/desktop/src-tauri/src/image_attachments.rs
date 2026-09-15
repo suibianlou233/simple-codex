@@ -156,7 +156,7 @@ pub(super) fn input(
     let refs = references(content)?;
     if !refs.is_empty() && !supported {
         return Err(image_error(
-            "当前模型配置尚不支持图片输入。DeepSeek 原生配置可自动使用视觉模型；其他接口请使用已支持图片的配置。",
+            "当前模型配置尚不支持图片输入。请使用千问 qwen3.8-max / qwen3.8-flash，或可自动切换视觉模型的 DeepSeek 原生配置。",
         ));
     }
     refs.iter().map(|reference| {
@@ -284,6 +284,11 @@ mod tests {
         let png = STANDARD.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==").unwrap();
         let attachment = save(&database, &project, "example.png", &png).unwrap();
         assert_eq!(read(&database, &project, &attachment.path).unwrap(), png);
+        let qwen = ResponsesGatewayConfig::new("http://localhost","qwen3.8-max",None).with_chat_completions(ChatDialect::Qwen);
+        let message = format!("![example]({})\n\n看图",attachment.path);
+        let inputs = input(&database,&project,&message,qwen.supports_images()).unwrap();
+        assert_eq!(inputs[0]["type"],"image");
+        assert_eq!(inputs[0]["url"],format!("data:image/png;base64,{}",STANDARD.encode(&png)));
         assert!(read(&database, &other, &attachment.path).is_err());
         assert!(
             references(&format!("```text\n![x]({})\n```", attachment.path))

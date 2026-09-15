@@ -1,7 +1,11 @@
 import type { CSSProperties } from "react";
 
-export type IconName = "sidebar" | "plus" | "search" | "folder" | "chat" | "chevron" | "settings" | "terminal" | "diff" | "review" | "close" | "arrow" | "paperclip" | "image" | "globe" | "code" | "check" | "copy" | "spark" | "more";
+export type IconName = "text" | "archive" | "restore" | "trash" | "sidebar" | "plus" | "search" | "folder" | "chat" | "chevron" | "settings" | "terminal" | "diff" | "review" | "close" | "arrow" | "paperclip" | "image" | "globe" | "code" | "check" | "copy" | "spark" | "more";
 const paths: Record<IconName, string> = {
+  text: "M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5",
+  archive: "M4 4h16v4H4z M5 8v12h14V8 M9 12h6",
+  restore: "M4 10a8 8 0 1 1 1 8 M4 4v6h6 M12 8v5l3 2",
+  trash: "M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7",
   sidebar: "M4 4h16v16H4z M9 4v16",
   plus: "M12 5v14 M5 12h14",
   search: "M16 16l5 5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0",

@@ -27,6 +27,10 @@ pub struct StateSnapshot {
 }
 
 impl AppState {
+    pub(crate) fn forget_task(&mut self, id: TaskId) {
+        self.tasks.remove(&id);
+        self.turns.retain(|_, turn| turn.task_id != id);
+    }
     #[must_use]
     pub fn project(&self, id: ProjectId) -> Option<&Project> {
         self.projects.get(&id)

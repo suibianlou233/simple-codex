@@ -95,7 +95,7 @@ async fn check_failure(chat: bool, invalid: bool) {
             .contains(if invalid {
                 "无法解析"
             } else {
-                "模型响应超时"
+                "模型响应等待超时"
             })
     );
     assert!(
@@ -131,3 +131,42 @@ async fn invalid_native_stream_is_not_mislabeled_as_timeout() {
 async fn invalid_chat_stream_is_not_mislabeled_as_timeout() {
     check_failure(true, true).await;
 }
+
+async fn healthy_long_stream(chat: bool) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let endpoint = if chat { "/chat/completions" } else { "/responses" };
+    let router = Router::new().route(endpoint, post(move || async move {
+        let chunks = stream::unfold(0, move |index| async move {
+            if index > 12 { return None; }
+            tokio::time::sleep(Duration::from_millis(75)).await;
+            let event = if index < 12 {
+                ": heartbeat\n\n".to_owned()
+            } else if chat {
+                "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"complete\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n".to_owned()
+            } else {
+                "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"ok\",\"status\":\"completed\",\"output\":[]}}\n\n".to_owned()
+            };
+            Some((Ok::<_,io::Error>(Bytes::from(event)), index+1))
+        });
+        ([(CONTENT_TYPE,"text/event-stream")],Body::from_stream(chunks))
+    }));
+    let server = tokio::spawn(async move { axum::serve(listener,router).await });
+    let config = ResponsesGatewayConfig::new(format!("http://{address}"),"test-model",None)
+        .with_model_alias("alias").with_timeout(Duration::from_millis(400));
+    let config = if chat {config.with_chat_completions(ChatDialect::Qwen)} else {config.with_deepseek_responses()};
+    let gateway = ResponsesGatewayHandle::start(config).await.unwrap();
+    let body = reqwest::Client::new().post(format!("{}/responses",gateway.base_url()))
+        .timeout(Duration::from_secs(5)).bearer_auth(gateway.client_token().expose_for_child())
+        .json(&json!({"model":"alias","stream":true,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"test"}]}],"tools":[]}))
+        .send().await.unwrap().text().await.unwrap();
+    assert!(body.contains("response.completed"),"{body}");
+    assert!(!body.contains("response.failed"),"{body}");
+    gateway.shutdown().await.unwrap();
+    server.abort();
+}
+
+#[tokio::test]
+async fn healthy_native_stream_can_outlive_idle_timeout() { healthy_long_stream(false).await; }
+#[tokio::test]
+async fn healthy_qwen_stream_can_outlive_idle_timeout() { healthy_long_stream(true).await; }

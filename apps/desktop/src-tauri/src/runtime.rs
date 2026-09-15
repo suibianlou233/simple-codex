@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+#[path = "task_lifecycle.rs"]
+pub(crate) mod task_lifecycle;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -69,6 +71,8 @@ mod memory_control;
 pub(crate) mod memory_notes;
 #[path = "image_attachments.rs"]
 pub(crate) mod image_attachments;
+#[path = "skill_library.rs"]
+pub(crate) mod skill_library;
 #[path = "interactive_terminal.rs"]
 pub(crate) mod interactive_terminal;
 #[path = "browser.rs"]
@@ -88,6 +92,8 @@ mod turn_preparation;
 
 #[derive(Debug, Error)]
 pub(crate) enum DesktopError {
+    #[error("技能库无法加载：{0}")]
+    SkillLibrary(String),
     #[error("内核版本选择失败：{0}")]
     KernelSelection(String),
     #[error("确认记忆不能保存密钥或认证信息，请移除后重试")]
@@ -132,8 +138,6 @@ pub(crate) enum DesktopError {
     StateUnavailable,
     #[error("任务目标不能为空")]
     EmptyGoal,
-    #[error("任务目标不能超过 {maximum} 个字符")]
-    GoalTooLong { maximum: usize },
     #[error("任务 `{task_id}` 缺少有效的持久化创建记录")]
     MissingTaskCreatedEvent { task_id: String },
     #[error("本地保存的项目路径标识无效")]
@@ -142,8 +146,6 @@ pub(crate) enum DesktopError {
     ModelProfileNotFound(String),
     #[error("消息不能为空")]
     EmptyMessage,
-    #[error("消息不能超过 {maximum} 个字符")]
-    MessageTooLong { maximum: usize },
     #[error("模型配置值超出支持范围")]
     InvalidModelProfile,
     #[error("上下文窗口至少需要 {minimum} Token，才能容纳 Agent、项目规则和用户消息")]
@@ -194,8 +196,8 @@ pub(crate) enum DesktopError {
     UnsupportedCodexOperation(&'static str),
 }
 
-const MAX_TASK_GOAL_CHARS: usize = 16_000;
-const MAX_MESSAGE_CHARS: usize = 16_000;
+
+// Message size is governed by the configured model and transport, not a 16k UI limit.
 const MIN_CONTEXT_WINDOW_TOKENS: u32 = 16_384;
 const MIN_OUTPUT_TOKENS: u32 = 1_024;
 const MIN_INPUT_BUDGET_TOKENS: u32 = 8_192;
@@ -526,6 +528,7 @@ pub fn resume_pending_continuations(app: &AppHandle, state: &DesktopState) {
 }
 
 struct DesktopRuntime {
+    lifecycle_pending: HashSet<TaskId>,
     core: InMemoryTaskService,
     storage: Storage,
     database_path: PathBuf,
@@ -1046,6 +1049,7 @@ impl DesktopRuntime {
             storage,
             database_path: database_path.to_path_buf(),
             project_leases: HashMap::new(),
+            lifecycle_pending: HashSet::new(),
             pending_codex_finishes: HashMap::new(),
             pending_codex_submissions,
             preparing_codex_turns: HashMap::new(),
@@ -1290,6 +1294,7 @@ impl DesktopRuntime {
     }
 
     fn snapshot(&self) -> Result<BackendSnapshot, DesktopError> {
+        let archived = self.storage.archived_task_ids()?;
         let state = self.core.snapshot();
         let projects = state
             .projects
@@ -1317,6 +1322,7 @@ impl DesktopRuntime {
             .tasks
             .iter()
             .map(|task| BackendTask {
+                archived: archived.contains(&task.id.to_string()),
                 id: task.id.to_string(),
                 project_id: task.project_id.to_string(),
                 title: task.title.clone(),
@@ -1696,11 +1702,6 @@ impl DesktopRuntime {
         if goal.is_empty() {
             return Err(DesktopError::EmptyGoal);
         }
-        if goal.chars().count() > MAX_TASK_GOAL_CHARS {
-            return Err(DesktopError::GoalTooLong {
-                maximum: MAX_TASK_GOAL_CHARS,
-            });
-        }
         let project_id = parse_project_id(&input.project_id)?;
         let permission_level = input.permission_level;
         ensure_permission_available(permission_level)?;
@@ -2040,6 +2041,7 @@ impl DesktopRuntime {
         &mut self,
         input: &StartChatInput,
     ) -> Result<PreparedCodexTurn, DesktopError> {
+        if !self.lifecycle_pending.is_empty() { return Err(DesktopError::StateUnavailable); }
         let content = validate_chat_content(&input.content)?;
         let project_id = parse_project_id(&input.project_id)?;
         let permission_level = input.permission_level;
@@ -2176,6 +2178,9 @@ impl DesktopRuntime {
         &mut self,
         input: &StartTurnInput,
     ) -> Result<PreparedCodexTurn, DesktopError> {
+        if !self.lifecycle_pending.is_empty() || self.storage.archived_task_ids()?.contains(&input.task_id) {
+            return Err(DesktopError::UnsupportedCodexOperation("发送：请先恢复归档对话并等待管理操作完成"));
+        }
         let content = validate_chat_content(&input.content)?;
         let task_id = parse_task_id(&input.task_id)?;
         let model_profile_id = match self.task_backends.get(&task_id) {
@@ -2328,6 +2333,7 @@ impl DesktopRuntime {
     }
 
     fn prepare_codex_control(&self, task_id: &str) -> Result<PreparedCodexControl, DesktopError> {
+        if !self.lifecycle_pending.is_empty() { return Err(DesktopError::StateUnavailable); }
         let parsed_task_id = parse_task_id(task_id)?;
         let model_profile_id = match self.task_backends.get(&parsed_task_id) {
             Some(TaskBackend::Codex { model_profile_id }) => model_profile_id,
@@ -2370,11 +2376,7 @@ impl DesktopRuntime {
         if content.is_empty() {
             return Err(DesktopError::EmptyMessage);
         }
-        if content.chars().count() > MAX_MESSAGE_CHARS {
-            return Err(DesktopError::MessageTooLong {
-                maximum: MAX_MESSAGE_CHARS,
-            });
-        }
+
         let project_id = parse_project_id(&input.project_id)?;
         let permission_level = input.permission_level;
         ensure_permission_available(permission_level)?;
@@ -2534,11 +2536,7 @@ impl DesktopRuntime {
         if content.is_empty() {
             return Err(DesktopError::EmptyMessage);
         }
-        if content.chars().count() > MAX_MESSAGE_CHARS {
-            return Err(DesktopError::MessageTooLong {
-                maximum: MAX_MESSAGE_CHARS,
-            });
-        }
+
         let task_id = parse_task_id(&input.task_id)?;
         let state = self.core.snapshot();
         let task = state
@@ -2686,11 +2684,7 @@ impl DesktopRuntime {
         if content.is_empty() {
             return Err(DesktopError::EmptyMessage);
         }
-        if content.chars().count() > MAX_MESSAGE_CHARS {
-            return Err(DesktopError::MessageTooLong {
-                maximum: MAX_MESSAGE_CHARS,
-            });
-        }
+
         let rewind_event = NewEvent {
             event_id: Uuid::new_v4().to_string(),
             task_id: task_id.to_string(),
@@ -4248,6 +4242,7 @@ pub struct BackendProject {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackendTask {
+    archived: bool,
     id: String,
     project_id: String,
     title: String,
@@ -5635,6 +5630,7 @@ async fn ensure_codex_kernel(
     let kernel_key = location.cache_key;
     if let Some(client) = kernels_guard.get(&kernel_key) {
         client.register_model(gateway).await?;
+        if executable.is_upstream_preview() { skill_library::apply_to_kernel(&app, client).await?; }
         return Ok((client.clone(), kernel_key));
     }
     let profile_home = codex_home.join(home_name);
@@ -5643,6 +5639,12 @@ async fn ensure_codex_kernel(
         config.project_memory = Some(location.scope);
     }
     let (client, events) = CodexKernelClient::start(config).await?;
+    if executable.is_upstream_preview() {
+        if let Err(error) = skill_library::apply_to_kernel(&app, &client).await {
+            client.shutdown().await?;
+            return Err(error);
+        }
+    }
     kernels_guard.insert(kernel_key.to_owned(), client.clone());
     drop(kernels_guard);
     tauri::async_runtime::spawn(consume_codex_events(
@@ -7639,12 +7641,26 @@ fn validate_chat_content(content: &str) -> Result<&str, DesktopError> {
     if content.is_empty() {
         return Err(DesktopError::EmptyMessage);
     }
-    if content.chars().count() > MAX_MESSAGE_CHARS {
-        return Err(DesktopError::MessageTooLong {
-            maximum: MAX_MESSAGE_CHARS,
-        });
-    }
+
     Ok(content)
+}
+
+#[cfg(test)]
+mod long_message_tests {
+    use super::validate_chat_content;
+
+    #[test]
+    fn long_unicode_messages_are_accepted_without_truncation() {
+        for length in [16_000, 16_001, 1_000_000] {
+            let text = "文".repeat(length);
+            assert_eq!(validate_chat_content(&text).expect("valid long message"), text);
+        }
+    }
+
+    #[test]
+    fn blank_messages_are_still_rejected() {
+        assert!(validate_chat_content(" \r\n\t ").is_err());
+    }
 }
 
 fn selected_model_profile(
@@ -7828,7 +7844,9 @@ fn codex_item_diff(item: &CodexThreadItem) -> Option<String> {
 }
 
 fn codex_item_result(item: &CodexThreadItem, status: &str) -> String {
-    let mut sections = vec![format!("Codex 操作状态：{status}")];
+    let mut sections = Vec::new();
+    if let Some(name) = skill_library::read_skill_name(item) { sections.push(format!("已读取技能：{name}")); }
+    sections.push(format!("Codex 操作状态：{status}"));
     if let Some(exit_code) = item.value.get("exitCode").and_then(Value::as_i64) {
         sections.push(format!("退出码：{exit_code}"));
     }
@@ -8181,7 +8199,7 @@ mod tests {
 
     use super::{
         ActionPayload, ActionStatus, CodexTurnBinding, CreateTaskInput, DesktopError,
-        DesktopRuntime, DesktopToolContext, MAX_PROJECT_INSTRUCTION_BYTES, MAX_TASK_GOAL_CHARS,
+        DesktopRuntime, DesktopToolContext, MAX_PROJECT_INSTRUCTION_BYTES,
         ModelContextOverrides, PartialToolCall, PendingWriteDraft, PermissionLevel,
         SaveModelProfileInput, StartChatInput, StartTurnInput, ToolDisposition, TurnOutcome,
         capability_boundary, codex_permission_config, coding_tool_definitions, coding_tool_router,
@@ -9760,7 +9778,7 @@ mod tests {
     }
 
     #[test]
-    fn task_goal_limit_is_enforced_at_the_ipc_boundary() {
+    fn long_task_goal_is_accepted_at_the_ipc_boundary() {
         let directory = tempdir().expect("temporary data directory should be created");
         let project_root = directory.path().join("goal-project");
         fs::create_dir(&project_root).expect("temporary project should be created");
@@ -9776,11 +9794,11 @@ mod tests {
             .create_task(CreateTaskInput {
                 project_id,
                 title: "oversized goal".to_owned(),
-                goal: "界".repeat(MAX_TASK_GOAL_CHARS + 1),
+                goal: "界".repeat(16_001),
                 permission_level: PermissionLevel::Approval,
             })
-            .expect_err("oversized goal should be rejected");
-        assert!(matches!(error, DesktopError::GoalTooLong { .. }));
+            .expect("long goal should be accepted");
+        assert!(!error.tasks.is_empty());
     }
 
     #[test]

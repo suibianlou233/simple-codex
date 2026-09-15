@@ -12,6 +12,35 @@ fn config(server: &MockServer, alias: &str, model: &str, key: &str) -> Responses
 }
 
 #[tokio::test]
+async fn qwen_gateway_sends_supported_roles_to_chat_endpoint() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .and(body_partial_json(json!({"model":"qwen3.8-max","messages":[
+            {"role":"system","content":"Agent instructions"},
+            {"role":"system","content":"Developer instructions"},
+            {"role":"user","content":"Hello"}
+        ]})))
+        .respond_with(ResponseTemplate::new(200).insert_header("content-type","text/event-stream")
+            .set_body_string("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"))
+        .expect(1).mount(&server).await;
+    let gateway = ResponsesGatewayHandle::start(config(&server,"qwen-test","qwen3.8-max","fixture")
+        .with_chat_completions(crate::ChatDialect::Qwen)).await.unwrap();
+    let response = Client::new().post(format!("{}/responses",gateway.base_url()))
+        .bearer_auth(gateway.client_token().expose_for_child())
+        .json(&json!({"model":"qwen-test","stream":true,"instructions":"Agent instructions","input":[
+            {"type":"message","role":"developer","content":[{"type":"input_text","text":"Developer instructions"}]},
+            {"type":"message","role":"user","content":[{"type":"input_text","text":"Hello"}]}
+        ]})).send().await.unwrap();
+    assert!(response.status().is_success());
+    let body=response.text().await.unwrap();
+    assert!(body.contains("response.completed"),"{body}");
+    assert!(!body.contains("response.failed"),"{body}");
+    server.verify().await;
+    gateway.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn revisions_keep_endpoint_model_credential_and_inflight_request_isolated() {
     let old = MockServer::start().await;
     let new = MockServer::start().await;

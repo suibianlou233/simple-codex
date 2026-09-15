@@ -50,7 +50,8 @@ impl ChatCompletionsAdapter {
             ));
         }
         let client = Client::builder()
-            .timeout(config.timeout)
+            .connect_timeout(Duration::from_secs(30).min(config.timeout))
+            .read_timeout(config.timeout)
             // A configured endpoint must not silently send the request to a
             // different host through an HTTP redirect.
             .redirect(reqwest::redirect::Policy::none())

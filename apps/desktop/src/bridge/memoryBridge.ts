@@ -23,6 +23,23 @@ const cloneSnapshot = (snapshot: DesktopSnapshot): DesktopSnapshot =>
   structuredClone(snapshot);
 
 export class MemoryDesktopBridge implements DesktopBridge {
+  async setTaskArchived(taskId: string, archived: boolean): Promise<void> {
+    if (this.snapshot.turns.some(turn => turn.status === "running")) throw new Error("请先停止运行中的任务");
+    const task = this.snapshot.tasks.find(task => task.id === taskId);
+    if (!task) throw new Error("对话不存在");
+    task.archived = archived;
+    if (this.snapshot.activeTaskId === taskId && archived) this.snapshot.activeTaskId = null;
+    this.emit();
+  }
+  async deleteTask(taskId: string): Promise<void> {
+    if (this.snapshot.turns.some(turn => turn.status === "running")) throw new Error("请先停止运行中的任务");
+    this.snapshot.tasks = this.snapshot.tasks.filter(task => task.id !== taskId);
+    this.snapshot.turns = this.snapshot.turns.filter(turn => turn.taskId !== taskId);
+    this.snapshot.timeline = this.snapshot.timeline.filter(item => item.taskId !== taskId);
+    this.snapshot.actions = this.snapshot.actions.filter(action => action.taskId !== taskId);
+    if (this.snapshot.activeTaskId === taskId) this.snapshot.activeTaskId = null;
+    this.emit();
+  }
   private snapshot: DesktopSnapshot;
   private readonly listeners = new Set<(snapshot: DesktopSnapshot) => void>();
   private sequence = 0;

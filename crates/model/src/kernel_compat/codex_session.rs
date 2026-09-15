@@ -42,6 +42,30 @@ pub enum CodexForkPoint<'a> {
     Through(&'a str),
 }
 
+#[cfg(test)]
+mod deletion_tests {
+    use super::*;
+    struct FailingRpc(Value);
+    #[async_trait]
+    impl CodexRpc for FailingRpc {
+        async fn request(&self, method: &str, params: Value) -> Result<Value, CodexKernelError> {
+            assert_eq!(method, "thread/delete");
+            assert_eq!(params, json!({"threadId":"fixture"}));
+            Err(CodexKernelError::Rpc(self.0.clone()))
+        }
+    }
+    #[tokio::test]
+    async fn deletion_retry_accepts_only_exact_missing_history_error() {
+        let missing = json!({"code":-32600,"message":"no rollout found for thread id fixture"});
+        assert!(CodexSessionBridge::new(FailingRpc(missing)).delete_thread("fixture").await.is_ok());
+        for error in [json!({"code":-32600,"message":"permission denied"}),
+            json!({"code":-32600,"message":"no rollout found for thread id other"}),
+            json!({"code":-32601,"message":"method not found"})] {
+            assert!(CodexSessionBridge::new(FailingRpc(error)).delete_thread("fixture").await.is_err());
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodexHistoryTurn {
     pub id: String,
@@ -100,6 +124,17 @@ where
 {
     pub fn new(rpc: R) -> Self {
         Self { rpc }
+    }
+
+    pub async fn delete_thread(&self, thread_id: &str) -> Result<(), CodexSessionError> {
+        match self.rpc.request("thread/delete", json!({ "threadId": thread_id })).await {
+            Ok(_) => Ok(()),
+            // The pinned kernel returns this exact error on a repeated deletion.
+            // Allow recovery if native deletion committed before the local DB did.
+            Err(CodexKernelError::Rpc(error)) if error["code"] == -32600
+                && error["message"] == format!("no rollout found for thread id {thread_id}") => Ok(()),
+            Err(error) => Err(error.into()),
+        }
     }
 
     pub async fn start_thread(

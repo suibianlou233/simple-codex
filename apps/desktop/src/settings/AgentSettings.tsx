@@ -8,10 +8,12 @@ export function AgentSettings({
   bridge,
   taskId,
   onClose,
+  onManageSkills,
 }: {
   bridge: DesktopBridge;
   taskId: string;
   onClose: () => void;
+  onManageSkills?: () => void;
 }) {
   const [capabilities, setCapabilities] = useState<AgentCapabilities>();
   const dialogRef = useDialog(onClose);
@@ -160,6 +162,7 @@ export function AgentSettings({
             {forgotten?.taskId === taskId ? <p role="status">自动记忆已清空，此记忆区已停止从 {new Date(forgotten.cutoff * 1000).toLocaleString("zh-CN")} 及以前创建的对话自动学习。原聊天记录仍然保留；用户确认的记忆与已有上下文未被移除。{forgotten.cutoff * 1000 > Date.now() + 1000 ? "检测到来源时间晚于本机时间，新任务的自动学习可能暂不可用，请检查系统时间。" : ""}</p> : null}
             <section className="agent-feature-section">
               <h3>项目 Skills <span>{capabilities.skills.filter((skill) => skill.enabled).length}</span></h3>
+              {onManageSkills && <button type="button" onClick={onManageSkills}>管理技能</button>}
               {capabilities.skills.length === 0 ? <small>当前项目没有可用 Skill。</small> : (
                 <ul>
                   {capabilities.skills.map((skill) => (

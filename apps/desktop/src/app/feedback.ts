@@ -5,6 +5,8 @@ export function toMessage(cause: unknown): string {
     return "旧对话的自动学习已停止，但记忆文件尚未完全清理。请稍后重试清空；不要将这次操作视为全部完成。";
   if (raw.includes("memory workspace busy; retry after memory processing finishes"))
     return "项目记忆正在整理，尚未清空。请稍后重试。";
+  if (raw.includes("模型响应等待超时") || raw.includes("simple_upstream_stream_timeout"))
+    return "模型连续未返回数据，已达到无响应等待时间。请检查网络，或在模型设置中延长等待时间后重试。";
   if (/401|403|unauthorized|invalid.api.key|密钥|凭据/i.test(raw))
     return "模型连接未获授权，请检查模型设置中的访问凭据。";
   if (/timeout|timed out|超时/i.test(raw))

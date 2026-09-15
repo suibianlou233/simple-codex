@@ -1,16 +1,20 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { AttachmentSummary, ContextUsage, ModelProfileSummary, PermissionLevel, TurnSummary } from "../bridge/types";
 import { composerHeight, shouldSubmitMessage } from "../app/interactions";
 import { Icon } from "./Icon";
 import { PermissionSelector } from "./PermissionSelector";
 import { StoredImage } from "./StoredImage";
 import { buildComposerMessage } from "../app/attachmentDraft";
+import { composeTextDraft, LARGE_PASTE_CHAR_THRESHOLD, type PastedTextBlock } from "../app/textDraft";
+import { rememberSentText } from "../app/sentText";
+import { useDialog } from "./useDialog";
 
 export function Composer({
   projectId, projectName, modelProfiles = [], activeModelId, onModelChange, onModelSettings, contextUsage, phase,
   activeTurnId,
   disabled,
   content,
+  pastes = [], onTextPaste, onRemovePaste, onEditPaste,
   attachments,
   onContentChange,
   onAttach,
@@ -37,6 +41,10 @@ export function Composer({
   activeTurnId: string | null;
   disabled: boolean;
   content: string;
+  pastes?: PastedTextBlock[];
+  onTextPaste?: (text: string, start: number, end: number) => void;
+  onRemovePaste?: (id: string) => void;
+  onEditPaste?: (id: string, text: string) => void;
   attachments: AttachmentSummary[];
   onContentChange: (content: string) => void;
   onAttach: () => Promise<void>;
@@ -54,6 +62,8 @@ export function Composer({
 }) {
   const [cancelRequestedTurnId, setCancelRequestedTurnId] = useState<string>();
   const [draggingImages, setDraggingImages] = useState(false);
+  const [editingPaste, setEditingPaste] = useState<PastedTextBlock>();
+  const pasteCounts = useMemo(() => new Map(pastes.map(block => [block.id, Array.from(block.text).length.toLocaleString()])), [pastes]);
   const dragDepth = useRef(0);
   const canAddImages = Boolean(projectId && !activeTurnId && !disabled && onPasteImages);
   useEffect(() => {
@@ -70,6 +80,7 @@ export function Composer({
   useEffect(() => { dragDepth.current = 0; setDraggingImages(false); }, [projectId, activeTurnId, disabled]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
+  const submittingRef = useRef(false);
   useEffect(() => {
     const input = textareaRef.current;
     if (!input) return;
@@ -98,13 +109,15 @@ export function Composer({
     activeTurnId && cancelRequestedTurnId === activeTurnId,
   );
   const canSend = Boolean(
-    projectId && (content.trim() || attachments.length > 0) && !activeTurnId && !disabled,
+    projectId && (content.trim() || pastes.length > 0 || attachments.length > 0) && !activeTurnId && !disabled,
   );
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!projectId || !canSend) return;
-    const message = buildComposerMessage(content, attachments);
-    void onSend(message);
+    if (!projectId || !canSend || submittingRef.current) return;
+    const message = buildComposerMessage(composeTextDraft(content, pastes), attachments);
+    submittingRef.current = true;
+    void rememberSentText(message, content, pastes).then(() => onSend(message))
+      .finally(() => {submittingRef.current = false;});
   };
   const usagePercent = contextUsage && contextUsage.contextWindowTokens > 0 ? Math.min(100, Math.round(contextUsage.estimatedTokens / contextUsage.contextWindowTokens * 100)) : undefined;
   return (
@@ -140,6 +153,13 @@ export function Composer({
           if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onRemoveAttachment(attachment.path); textareaRef.current?.focus(); }
           if (event.key === "ArrowDown" || event.key === "Escape") { event.preventDefault(); textareaRef.current?.focus(); }
         }} onClick={() => onRemoveAttachment(attachment.path)}><Icon name="close" size={12} /></button></span>)}</div> : null}
+        {pastes.length > 0 ? <div className="pasted-text-list" aria-label="已粘贴文本">{pastes.map((block, index) => <div className="pasted-text-chip" key={block.id}>
+          <button className="pasted-text-open" type="button" aria-label={`查看粘贴文本 ${index + 1}`} onClick={() => setEditingPaste(block)}>
+            <span className="pasted-text-icon"><Icon name="text" size={19} /></span>
+            <span className="pasted-text-label"><strong>粘贴文本{pastes.length > 1 ? ` ${index + 1}` : ""}</strong><small>{pasteCounts.get(block.id)} 字符</small></span>
+          </button>
+          <button className="pasted-text-remove" type="button" aria-label={`移除粘贴文本 ${index + 1}`} disabled={disabled || Boolean(activeTurnId)} onClick={() => { onRemovePaste?.(block.id); textareaRef.current?.focus(); }}><Icon name="close" size={13} /></button>
+        </div>)}</div> : null}
         <textarea
           ref={textareaRef}
           rows={1}
@@ -153,7 +173,16 @@ export function Composer({
           onChange={(event) => onContentChange(event.target.value)}
           onPaste={event => {
             const images = Array.from(event.clipboardData.files).filter(file => file.type.startsWith("image/"));
-            if (images.length && canAddImages && onPasteImages) { event.preventDefault(); void onPasteImages(images); }
+            if (images.length && canAddImages && onPasteImages) { event.preventDefault(); void onPasteImages(images); return; }
+            const text = event.clipboardData.getData("text/plain");
+            if (!text) return;
+            event.preventDefault();
+            const {selectionStart: start, selectionEnd: end} = event.currentTarget;
+            const collapse = Boolean(onTextPaste && Array.from(text).length > LARGE_PASTE_CHAR_THRESHOLD);
+            if (onTextPaste) onTextPaste(text, start, end);
+            else onContentChange(content.slice(0, start) + text + content.slice(end));
+            const cursor = collapse ? 0 : start + text.length;
+            requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(cursor, cursor); });
           }}
           onKeyDown={(event) => {
             if (event.key === "ArrowUp" && event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0 && attachments.length && !event.nativeEvent.isComposing) {
@@ -230,6 +259,17 @@ export function Composer({
         <span className="composer-project" title={projectName}><Icon name="folder" size={12} />{projectName ?? "尚未选择项目"}</span>
         {usagePercent !== undefined ? <span className="context-meter" title={`估算上下文：${contextUsage?.estimatedTokens.toLocaleString()} / ${contextUsage?.contextWindowTokens.toLocaleString()} tokens；不是计费数据`}><meter min={0} max={100} value={usagePercent} aria-label="估算上下文使用比例" />{usagePercent}%</span> : null}
       </div>
+      {editingPaste ? <PastedTextEditor key={editingPaste.id} block={editingPaste} disabled={disabled || Boolean(activeTurnId)} onClose={() => setEditingPaste(undefined)} onSave={text => { onEditPaste?.(editingPaste.id, text); setEditingPaste(undefined); requestAnimationFrame(() => textareaRef.current?.focus()); }} /> : null}
     </footer>
   );
+}
+
+function PastedTextEditor({block, disabled, onClose, onSave}: {block: PastedTextBlock; disabled: boolean; onClose: () => void; onSave: (text: string) => void}) {
+  const [text, setText] = useState(block.text);
+  const ref = useDialog(onClose);
+  return <div className="modal-backdrop pasted-text-backdrop" onMouseDown={onClose}><section className="pasted-text-dialog" ref={ref} role="dialog" aria-modal="true" aria-label="粘贴文本" tabIndex={-1} onMouseDown={event => event.stopPropagation()}>
+    <header><div><strong>粘贴文本</strong><span>{Array.from(text).length.toLocaleString()} 字符</span></div><button type="button" className="icon-button" aria-label="关闭文本预览" onClick={onClose}><Icon name="close" size={18} /></button></header>
+    <textarea aria-label="编辑粘贴文本" value={text} onChange={event => setText(event.target.value)} readOnly={disabled} spellCheck={false} />
+    <footer><button className="paste-edit-cancel" type="button" onClick={onClose}>取消</button><button className="paste-edit-save" type="button" disabled={disabled || !text.trim()} onClick={() => onSave(text)}>保存</button></footer>
+  </section></div>;
 }

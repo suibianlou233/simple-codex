@@ -70,6 +70,7 @@ export type BackendProject = {
 };
 
 export type BackendTask = {
+  archived?: boolean;
   id: string;
   projectId: string;
   title: string;
@@ -215,12 +216,20 @@ export class TauriDesktopBridge implements DesktopBridge {
     return invokeDesktop<string | null>("export_diagnostics");
   }
 
+  async setTaskArchived(taskId: string, archived: boolean): Promise<void> {
+    this.accept(await invokeDesktop<BackendSnapshot>("set_task_archived", { taskId, archived }));
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    this.accept(await invokeDesktop<BackendSnapshot>("delete_task", { taskId }));
+  }
+
   async selectProject(projectId: string): Promise<void> {
     const current = this.requireSnapshot();
     if (!current.projects.some((project) => project.id === projectId)) {
       throw new Error("选择的本地项目不存在");
     }
-    const activeTaskId = current.tasks.find((task) => task.projectId === projectId)?.id ?? null;
+    const activeTaskId = current.tasks.find((task) => task.projectId === projectId && !task.archived)?.id ?? null;
     this.publish({
       ...current,
       activeProjectId: projectId,
@@ -237,6 +246,7 @@ export class TauriDesktopBridge implements DesktopBridge {
     const current = this.requireSnapshot();
     const task = current.tasks.find((candidate) => candidate.id === taskId);
     if (!task) throw new Error("选择的本地对话不存在");
+    if (task.archived) throw new Error("请先从已归档列表恢复这段对话");
     this.publish({
       ...current,
       activeProjectId: task.projectId,
@@ -580,6 +590,7 @@ export function projectBackendSnapshot(
 ): DesktopSnapshot {
   const projects: ProjectSummary[] = backend.projects.map((project) => ({ ...project }));
   const tasks: TaskSummary[] = backend.tasks.map((task) => ({
+    archived: task.archived ?? false,
     id: task.id,
     projectId: task.projectId,
     title: task.title,
@@ -671,11 +682,11 @@ export function selectActiveTask(
 ): string | null {
   if (
     preferred &&
-    tasks.some((task) => task.id === preferred && task.projectId === projectId)
+    tasks.some((task) => task.id === preferred && task.projectId === projectId && !task.archived)
   ) {
     return preferred;
   }
-  return tasks.find((task) => task.projectId === projectId)?.id ?? null;
+  return tasks.find((task) => task.projectId === projectId && !task.archived)?.id ?? null;
 }
 
 function createTimeline(

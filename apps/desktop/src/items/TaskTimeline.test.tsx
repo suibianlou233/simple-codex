@@ -17,6 +17,12 @@ function render(entries: TimelineEntry[], turns: TurnSummary[], activeTurnId?: s
   }));
 }
 describe("user-facing conversation", () => {
+  it("shows phase-less provider deltas while running and suppresses failed partial output", () => {
+    const partial = {...entry("千问正在逐字输出"), status:"streaming" as const};
+    expect(render([partial],[turn("running")],"turn-1")).toContain("千问正在逐字输出");
+    expect(render([partial],[turn("failed")])).not.toContain("千问正在逐字输出");
+    expect(render([partial],[turn("cancelled")])).not.toContain("千问正在逐字输出");
+  });
   it.each(["completed", "failed", "cancelled"] as const)("folds %s commentary across hidden tools with the terminal notice outside", (status) => {
     const html = render([entry("request","user"),
       {...entry("first-note"),phase:"commentary"}, entry("hidden-tool","command"),
@@ -311,3 +317,10 @@ describe("user-facing conversation", () => {
     expect(html).not.toContain("raw-result");
   });
 });
+
+ it("keeps successful skill-read evidence visible after completion, never for failed reads", () => {
+    const action: ToolActionSummary = {id:"skill",taskId:"task-1",turnId:"turn-1",kind:"run_command",status:"applied",title:"read",detail:"Get-Content SKILL.md",diff:null,result:"已读取技能：write-serialized-novel\n退出码：0",canUndo:false,createdAt:""};
+    const entries=[entry("request","user"),{...entry("answer"),phase:"final_answer" as const}];
+    expect(render(entries,[turn("completed")],undefined,[action])).toContain("已读取技能：write-serialized-novel");
+    expect(render(entries,[turn("completed")],undefined,[{...action,status:"failed"}])).not.toContain('class="skill-read-evidence"');
+ });

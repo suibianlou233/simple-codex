@@ -2,6 +2,7 @@
 //! task's credential, endpoint or protocol merely because settings were saved.
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use reqwest::{Client, Url};
 
@@ -81,7 +82,10 @@ impl Routes {
         };
         let client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(config.upstream_timeout);
+            // Long responses may keep producing data for many minutes. Bound
+            // stalled reads, not the total lifetime of a healthy response.
+            .connect_timeout(Duration::from_secs(30).min(config.upstream_timeout))
+            .read_timeout(config.upstream_timeout);
         let client = if crate::proxy_policy::is_loopback_endpoint(&upstream_url) {
             client.no_proxy()
         } else {

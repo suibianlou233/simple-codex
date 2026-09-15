@@ -6,6 +6,7 @@ import { CopyButton } from "../components/CopyButton";
 import { ElapsedTime, elapsedBetween, formatElapsed } from "../components/ElapsedTime";
 import { toMessage } from "../app/feedback";
 import { SubagentReport } from "./SubagentReport";
+import { UserMessage, type TextDocument } from "./UserMessage";
 
 export function TaskTimeline({
   entries,
@@ -20,6 +21,7 @@ export function TaskTimeline({
   onRevise,
   onRegenerate,
   onBranch,
+  onOpenText,
 }: {
   entries: TimelineEntry[];
   actions: ToolActionSummary[];
@@ -33,6 +35,7 @@ export function TaskTimeline({
   onRevise: (messageId: string, content: string) => Promise<boolean>;
   onRegenerate: () => Promise<void>;
   onBranch: (messageId: string) => Promise<void>;
+  onOpenText?: (document: TextDocument) => void;
 }) {
   const [editingMessageId, setEditingMessageId] = useState<string>();
   const [editDraft, setEditDraft] = useState("");
@@ -76,8 +79,8 @@ export function TaskTimeline({
     && turnsById.has(entry.turnId)
     && turnsById.get(entry.turnId)?.status !== "running",
   );
-  // Native final answers can stream; commentary stays in the local journal.
-  // Old/provider messages without phase keep the conservative completion fallback.
+  // Chat-compatible providers may omit phase. Live deltas are still visible;
+  // do not require a provider-specific final-answer label to stream them.
   const showAssistant = (entry: TimelineEntry) => {
     if (!entry.turnId) return entry.phase !== "commentary";
     const turn = turnsById.get(entry.turnId);
@@ -86,6 +89,7 @@ export function TaskTimeline({
     }
     if (turn?.status === "failed" || turn?.status === "cancelled") return false;
     if (entry.phase === "final_answer") return true;
+    if (!entry.phase && entry.status === "streaming") return true;
     if (turn?.status === "running" || (!turn && entry.turnId === activeTurnId)) return false;
     return entry.id === lastAssistantByTurn.get(entry.turnId);
   };
@@ -159,7 +163,7 @@ export function TaskTimeline({
                     </div>
                   </form>
                 ) : (
-                  <ItemRendererView item={entry} />
+                  entry.kind === "user" && onOpenText ? <UserMessage text={entry.detail ?? entry.title} onOpen={onOpenText}/> : <ItemRendererView item={entry} />
                 )}
                 {editingMessageId !== entry.id ? (
                   <div className="message-actions">
@@ -320,13 +324,18 @@ function WorkProcess({
 }) {
   const { pending, running, failure, failedOperations, rejectedOperations, unsettledOperations, childIssues, needsReview, summary, uncertain } =
     workProcessState(actions, active, evidence, outcome, childReport, phase);
+  const loadedSkills = [...new Set(actions.filter(action => action.status === "applied" && action.kind === "run_command").flatMap(action => {
+    const match = action.result?.match(/^已读取技能：([A-Za-z0-9_-]{1,100})(?:\r?\n|$)/);
+    return match ? [match[1]] : [];
+  }))];
   const undoableActions = actions.filter((action) => action.canUndo && !undoBlocked);
   // Submission protection stays in the runtime/composer; omit this duplicate row.
   const showSummary = !uncertain && (running || pending.length > 0 || failure || needsReview
     || outcome === "cancelled" || actions.some((action) => action.status === "undone"));
-  if (!showSummary && !childReport && undoableActions.length === 0) return null;
+  if (!loadedSkills.length && !showSummary && !childReport && undoableActions.length === 0) return null;
   return (
     <section className="work-process-wrap" data-turn-id={turnId}>
+      {loadedSkills.length > 0 && <p className="skill-read-evidence">已读取技能：{loadedSkills.join("、")}</p>}
       {showSummary ? (
         <div className="work-process work-process-live" data-running={running} data-attention={failure || needsReview} role={failure || needsReview ? "alert" : "status"}>
           <span className="work-process-dot" aria-hidden="true" />

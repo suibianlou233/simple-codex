@@ -9,7 +9,7 @@ export function TaskSearch({ snapshot, onClose, onSelect }: { snapshot: DesktopS
   const [query, setQuery] = useState("");
   const ref = useDialog(onClose);
   const composingRef = useRef(false);
-  const tasks = useMemo(() => findTasks(snapshot.tasks, snapshot.timeline, query, snapshot.projects), [query, snapshot]);
+  const tasks = useMemo(() => findTasks(snapshot.tasks.filter(task => !task.archived), snapshot.timeline, query, snapshot.projects), [query, snapshot]);
   const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     // Let the input method finish its candidate instead of opening a task or moving focus.
     if (isComposingKey({ isComposing: composingRef.current || event.nativeEvent.isComposing, keyCode: event.nativeEvent.keyCode })) return;

@@ -352,6 +352,21 @@ button:disabled { cursor:not-allowed; }
 .timeline-stack { width: min(780px, calc(100% - 54px)); margin: 28px auto; }
 .chat-message { display: flex; width: 100%; margin-bottom: 18px; }
 .chat-user { justify-content: flex-end; }
+.sent-text-content { display:flex; flex-direction:column; align-items:flex-end; gap:10px; min-width:0; }
+.sent-text-card { display:flex; align-items:center; gap:9px; max-width:100%; padding:11px 15px; border:1px solid var(--border); border-radius:18px; background:var(--surface); color:var(--text); cursor:pointer; font:inherit; text-align:left; transition:background .15s, border-color .15s; }
+.sent-text-card:hover { background:var(--surface-subtle); }
+.sent-text-card:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.sent-text-card > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.sent-text-card > svg, .sent-text-card > small { flex-shrink:0; color:var(--text-secondary); }
+.sent-text-card > small { font-size:11px; }
+.text-reader { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; background:var(--surface); border-left:1px solid var(--border); }
+.text-reader header { display:flex; align-items:center; gap:10px; padding:16px; border-bottom:1px solid var(--border); }
+.text-reader header > div { flex:1; min-width:0; display:grid; gap:4px; }
+.text-reader header strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.text-reader header small { color:var(--text-secondary); font-size:12px; }
+.text-reader header > button { display:inline-flex; align-items:center; gap:5px; padding:7px 9px; border:0; border-radius:8px; background:transparent; color:var(--text-secondary); font:inherit; font-size:12px; cursor:pointer; }
+.text-reader header > button:hover { background:var(--surface-hover); color:var(--text); }
+.text-reader pre { flex:1; overflow:auto; min-height:0; margin:0; padding:24px; white-space:pre-wrap; overflow-wrap:anywhere; font:14px/1.9 var(--font-ui, sans-serif); user-select:text; }
 .chat-assistant { justify-content: flex-start; }
 .message-column { display: grid; width: min(78%, 620px); min-width: 0; }
 .chat-user .message-column {
@@ -508,3 +523,51 @@ button:disabled { cursor:not-allowed; }
 .work-process-live strong { color: var(--text); font-size: 13px; font-weight: 700; }
 .work-process-attention { display: grid; gap: 9px; margin-top: 10px; }
 .work-process-attention .action-card { margin: 0; }
+.pasted-text-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 4px 12px; max-height: 156px; overflow-y: auto; }
+.pasted-text-chip { display: flex; align-items: center; max-width: 230px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; transition: border-color .15s, background .15s; }
+.pasted-text-chip:hover { border-color: var(--border-strong); background: var(--surface-subtle); }
+.pasted-text-open { display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 11px; min-width: 0; background: transparent; border: 0; text-align: left; cursor: pointer; color: var(--text); }
+.pasted-text-icon { display: grid; place-items: center; width: 30px; height: 34px; border-radius: 6px; background: var(--surface-hover); color: var(--text-secondary); flex: none; }
+.pasted-text-label { display: flex; flex-direction: column; gap: 4px; }
+.pasted-text-label strong { font-size: 12px; font-weight: 500; white-space: nowrap; }
+.pasted-text-label small { font-size: 11px; color: var(--text-tertiary); }
+.pasted-text-remove { display: grid; place-items: center; width: 24px; height: 24px; margin: 0 7px 0 3px; border: 0; border-radius: 6px; background: transparent; color: var(--text-tertiary); cursor: pointer; }
+.pasted-text-remove:hover { background: var(--surface-hover); color: var(--text); }
+.pasted-text-dialog { display: flex; flex-direction: column; width: min(720px, calc(100vw - 48px)); height: min(620px, calc(100vh - 80px)); background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 24px 80px #0003; overflow: hidden; }
+.pasted-text-dialog > header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.pasted-text-dialog > header > div { display: flex; gap: 12px; align-items: baseline; }
+.pasted-text-dialog strong { font-size: 14px; font-weight: 600; }
+.pasted-text-dialog header span { font-size: 12px; color: var(--text-tertiary); }
+.pasted-text-dialog > textarea { flex: 1; min-height: 0; width: 100%; box-sizing: border-box; padding: 20px; resize: none; outline: none; border: 0; font: inherit; font-size: 13px; line-height: 1.8; color: var(--text); background: transparent; }
+.pasted-text-dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+.pasted-text-dialog footer button { height: 34px; min-width: 70px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 12px; cursor: pointer; }
+.paste-edit-cancel { background: transparent; color: var(--text); }
+.paste-edit-save { background: var(--text); color: var(--surface); }
+.task-list-entry { display: flex; align-items: center; position: relative; border-radius: 8px; }
+.task-list-entry > .task-row { flex: 1; min-width: 0; padding-right: 30px; }
+.task-actions { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); }
+.task-actions > summary { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; list-style: none; color: var(--text-secondary); opacity: 0; transition: opacity .12s, background .12s; }
+.task-actions > summary::-webkit-details-marker { display: none; }
+.task-list-entry:hover .task-actions > summary, .task-list-entry:focus-within .task-actions > summary, .task-actions[open] > summary { opacity: 1; }
+.task-actions > summary:hover, .task-actions[open] > summary { background: var(--surface-hover); }
+.task-actions > div { position: absolute; right: 0; top: 32px; z-index: 40; width: 164px; padding: 5px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 28px #0002, 0 2px 6px #0001; }
+.task-actions button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 35px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.task-actions button:hover:not(:disabled) { background: var(--surface-hover); }
+.task-actions button svg { flex: none; color: var(--text-secondary); }
+.task-actions button.task-menu-delete { color: var(--danger); margin-top: 4px; }
+.task-actions button.task-menu-delete svg { color: inherit; }
+.task-actions button.task-menu-delete:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.archive-nav .archive-count { margin-left: auto; font-size: 11px; color: var(--text-tertiary); }
+.delete-conversation-dialog { width: min(400px, calc(100vw - 40px)); box-sizing: border-box; padding: 26px; background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 24px 80px #0003; }
+.delete-dialog-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 18px; border-radius: 13px; color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+.delete-conversation-dialog h2 { margin: 0 0 10px; font-size: 18px; font-weight: 600; letter-spacing: -.3px; }
+.delete-dialog-title { margin: 0 0 8px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; max-height: 65px; overflow: auto; }
+.delete-dialog-description { margin: 0; font-size: 12px; line-height: 1.8; color: var(--text-secondary); }
+.delete-dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 25px; }
+.delete-dialog-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; min-width: 76px; padding: 0 15px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background .12s; }
+.delete-dialog-actions .delete-cancel { background: transparent; color: var(--text); }
+.delete-dialog-actions .delete-cancel:hover { background: var(--surface-hover); }
+.delete-dialog-actions .delete-confirm { border-color: transparent; background: var(--danger); color: white; }
+.delete-dialog-actions .delete-confirm:hover:not(:disabled) { filter: brightness(.92); }
+
+.skill-read-evidence { color: var(--text-secondary); font-size: 12px; margin: 8px 0; }

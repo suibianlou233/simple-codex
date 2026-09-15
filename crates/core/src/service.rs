@@ -19,6 +19,10 @@ pub struct InMemoryTaskService {
 }
 
 impl InMemoryTaskService {
+    /// Update the projection only after durable task deletion has committed.
+    pub fn forget_deleted_task(&mut self, id: TaskId) {
+        self.state.forget_task(id);
+    }
     #[must_use]
     pub fn new() -> Self {
         Self::default()

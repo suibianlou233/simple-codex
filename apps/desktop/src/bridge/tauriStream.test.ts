@@ -22,6 +22,28 @@ import { TaskTimeline } from "../items/TaskTimeline";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+it("renders unphased native deltas before the turn completes", async () => {
+  vi.useFakeTimers();
+  wire.snapshot = {projects:[{id:"p",name:"p",path:"fixture"}],
+    tasks:[{id:"t",projectId:"p",title:"fixture",goal:"fixture",status:"running",updatedAtMs:1,lastSequence:1}],
+    turns:[{id:"turn",taskId:"t",status:"running",phase:"sampling",startedAtMs:1,finishedAtMs:null,sequence:1}],
+    messages:[],dataLocation:"fixture.db"};
+  const bridge = new TauriDesktopBridge();
+  const store = new WorkbenchStore();
+  store.hydrate(await bridge.load());
+  const unsubscribe = bridge.subscribe(store.hydrate);
+  for (const [index,content] of ["第一段", "第二段"].entries()) {
+    wire.listeners.get("turn-stream")?.({payload:{eventId:`qwen-${index}`,sequence:100+index,taskId:"t",turnId:"turn",itemId:"qwen",kind:"delta",content}});
+    await vi.advanceTimersByTimeAsync(33);
+    const snapshot = store.getSnapshot()!;
+    const html = renderToStaticMarkup(createElement(TaskTimeline,{entries:snapshot.timeline,turns:snapshot.turns,activeTurnId:snapshot.activeTurnId,
+      actions:[],disabled:false,onApprove:async()=>{},onReject:async()=>{},onUndo:async()=>{},onCancel:async()=>true,onRevise:async()=>true,onRegenerate:async()=>{},onBranch:async()=>{}}));
+    expect(html).toContain(index ? "第一段第二段" : "第一段");
+    expect(snapshot.turns[0].status).toBe("running");
+  }
+  unsubscribe();
+});
+
 afterEach(() => { vi.useRealTimers(); wire.listeners.clear(); wire.loadSnapshot = undefined; });
 
 it("folds all persisted commentary through the real bridge/store/render chain after high-counter streaming", async () => {

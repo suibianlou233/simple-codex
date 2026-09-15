@@ -10,6 +10,7 @@ mod journal;
 mod migrations;
 mod native_history;
 mod repository;
+mod task_lifecycle;
 
 pub use action::ActionClaim;
 pub use action::ActionClaimStatus;

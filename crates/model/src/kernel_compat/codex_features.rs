@@ -54,12 +54,26 @@ where
         Self { rpc }
     }
 
+    /// Registers Simple-owned skill directories without modifying kernel files.
+    pub async fn set_skill_roots(
+        &self,
+        roots: &[std::path::PathBuf],
+    ) -> Result<(), CodexFeatureError> {
+        if roots.iter().any(|root| !root.is_absolute()) {
+            return Err(CodexFeatureError::InvalidResponse("技能目录必须是绝对路径"));
+        }
+        self.rpc
+            .request("skills/extraRoots/set", json!({"extraRoots":roots}))
+            .await?;
+        Ok(())
+    }
+
     pub async fn list_skills(&self, cwd: &Path) -> Result<Vec<Value>, CodexFeatureError> {
         let response = self
             .rpc
             .request(
                 "skills/list",
-                json!({ "cwds": [cwd], "forceReload": false }),
+                json!({ "cwds": [cwd], "forceReload": true }),
             )
             .await?;
         response
@@ -293,6 +307,31 @@ mod tests {
                 .pop_front()
                 .ok_or(CodexKernelError::Unavailable)
         }
+    }
+
+    #[tokio::test]
+    async fn skill_roots_use_native_catalog_and_reject_relative_paths() {
+        let rpc = FakeRpc::new(vec![json!({}), json!({})]);
+        let bridge = CodexFeatureBridge::new(rpc.clone());
+        assert!(
+            bridge
+                .set_skill_roots(&[std::path::PathBuf::from("relative")])
+                .await
+                .is_err()
+        );
+        let root = std::env::current_dir().expect("cwd").join("skills");
+        bridge
+            .set_skill_roots(&[root.clone()])
+            .await
+            .expect("enable");
+        bridge.set_skill_roots(&[]).await.expect("disable");
+        assert_eq!(
+            *rpc.calls.lock().expect("calls"),
+            vec![
+                ("skills/extraRoots/set".into(), json!({"extraRoots":[root]})),
+                ("skills/extraRoots/set".into(), json!({"extraRoots":[]}))
+            ]
+        );
     }
 
     #[tokio::test]

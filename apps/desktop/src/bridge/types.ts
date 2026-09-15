@@ -12,6 +12,7 @@ export type PermissionLevel =
   | "system_full_access";
 
 export type TaskSummary = {
+  archived?: boolean;
   id: string;
   projectId: string;
   title: string;
@@ -289,6 +290,8 @@ export type SaveLocalMcpServerInput = {
 export type Unsubscribe = () => void;
 
 export interface DesktopBridge {
+  setTaskArchived(taskId: string, archived: boolean): Promise<void>;
+  deleteTask(taskId: string): Promise<void>;
   load(): Promise<DesktopSnapshot>;
   installWorkspaceSandbox(): Promise<void>;
   subscribe(listener: (snapshot: DesktopSnapshot) => void): Unsubscribe;

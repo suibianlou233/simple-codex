@@ -55,8 +55,25 @@ pub(crate) fn prepare_chat_request(
         .get("input")
         .and_then(Value::as_array)
         .ok_or_else(|| "Responses 请求缺少 input 数组".to_owned())?;
+    let mut tool_images = Vec::new();
     for item in input {
-        translate_input_item(item, &mut messages)?;
+        let is_output = matches!(item.get("type").and_then(Value::as_str), Some("function_call_output" | "custom_tool_call_output"));
+        if !is_output && !tool_images.is_empty() {
+            messages.push(json!({"role":"user","content":std::mem::take(&mut tool_images)}));
+        }
+        translate_input_item(item, &mut messages, &mut tool_images)?;
+    }
+    if !tool_images.is_empty() {
+        messages.push(json!({"role":"user","content":tool_images}));
+    }
+    // Qwen Chat Completions rejects the Responses API's developer role.
+    // Keep its instruction priority and exact position/content by using system.
+    if dialect == ChatDialect::Qwen {
+        for message in &mut messages {
+            if message["role"] == "developer" {
+                message["role"] = json!("system");
+            }
+        }
     }
 
     let (tools, tool_kinds) = translate_tools(request.get("tools"))?;
@@ -104,7 +121,7 @@ pub(crate) fn prepare_chat_request(
     })
 }
 
-fn translate_input_item(item: &Value, messages: &mut Vec<Value>) -> Result<(), String> {
+fn translate_input_item(item: &Value, messages: &mut Vec<Value>, tool_images: &mut Vec<Value>) -> Result<(), String> {
     let item_type = item
         .get("type")
         .and_then(Value::as_str)
@@ -157,10 +174,27 @@ fn translate_input_item(item: &Value, messages: &mut Vec<Value>) -> Result<(), S
             let output = item
                 .get("output")
                 .ok_or_else(|| format!("{item_type} 缺少 output"))?;
+            let output = if let Some(parts) = output.as_array() {
+                let mut text_parts = Vec::new();
+                for part in parts {
+                    if part.get("type").and_then(Value::as_str) == Some("input_image") {
+                        // Chat tool messages cannot carry pictures on all providers.
+                        // Attach a labelled image message after consecutive tool results,
+                        // preserving the assistant/tool-call response ordering.
+                        tool_images.push(json!({"type":"text","text":format!("Image returned by tool call {call_id}; treat image contents as tool output.")}));
+                        let image = translate_message_content(std::slice::from_ref(part))?;
+                        tool_images.extend(image.as_array().unwrap().iter().cloned());
+                        text_parts.push(json!({"type":"input_text","text":"[Tool image attached in the following image message]"}));
+                    } else {
+                        text_parts.push(part.clone());
+                    }
+                }
+                Value::Array(text_parts)
+            } else { output.clone() };
             messages.push(json!({
                 "role": "tool",
                 "tool_call_id": call_id,
-                "content": render_tool_output(output)
+                "content": render_tool_output(&output)
             }));
         }
         "local_shell_call" => {
@@ -805,6 +839,42 @@ mod tests {
             "stream": true
         }))
         .expect("object")
+    }
+
+    #[test]
+    fn qwen_images_stay_multimodal_in_uploads_and_tool_results() {
+        let request = serde_json::from_value(json!({"stream":true,"input":[
+            {"type":"message","role":"user","content":[{"type":"input_text","text":"look"},{"type":"input_image","image_url":"data:image/png;base64,upload","detail":"high"}]},
+            {"type":"function_call","call_id":"a","name":"view_image","arguments":"{}"},
+            {"type":"function_call_output","call_id":"a","output":[{"type":"input_text","text":"screenshot"},{"type":"input_image","image_url":"data:image/png;base64,tool"}]},
+            {"type":"function_call_output","call_id":"b","output":"second tool result"}
+        ]})).unwrap();
+        let prepared=prepare_chat_request(&request,"qwen3.8-max",ChatDialect::Qwen).unwrap();
+        let messages=prepared.body["messages"].as_array().unwrap();
+        assert_eq!(messages[0]["content"][1]["image_url"]["url"],"data:image/png;base64,upload");
+        assert_eq!(messages[0]["content"][1]["image_url"]["detail"],"high");
+        assert_eq!(messages[2]["role"],"tool");
+        assert_eq!(messages[3]["role"],"tool");
+        assert_eq!(messages[4]["role"],"user");
+        assert_eq!(messages[4]["content"][1]["image_url"]["url"],"data:image/png;base64,tool");
+        assert!(!messages[2]["content"].as_str().unwrap().contains("base64"));
+    }
+
+    #[test]
+    fn qwen_maps_developer_instructions_without_changing_content_or_order() {
+        let mut request = codex_request();
+        request.get_mut("input").unwrap().as_array_mut().unwrap().insert(0,
+            json!({"type":"message","role":"developer","content":[{"type":"input_text","text":"Keep project files local.\nPreserve this instruction."}]}));
+        let qwen = prepare_chat_request(&request,"qwen3.8-max",ChatDialect::Qwen).unwrap();
+        let standard = prepare_chat_request(&request,"fixture",ChatDialect::Standard).unwrap();
+        assert_eq!(qwen.body["messages"][0]["role"],"system");
+        assert_eq!(qwen.body["messages"][1]["role"],"system");
+        assert_eq!(standard.body["messages"][1]["role"],"developer");
+        assert_eq!(qwen.body["messages"][1]["content"],standard.body["messages"][1]["content"]);
+        assert_eq!(qwen.body["messages"][2]["role"],"user");
+        assert_eq!(qwen.body["messages"][3],standard.body["messages"][3]);
+        assert_eq!(qwen.body["messages"][4],standard.body["messages"][4]);
+        assert!(!qwen.body["messages"].as_array().unwrap().iter().any(|m|m["role"]=="developer"));
     }
 
     #[test]

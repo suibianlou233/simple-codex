@@ -83,6 +83,9 @@ impl ResponsesGatewayConfig {
                 .upstream_model
                 .trim()
                 .eq_ignore_ascii_case(DEEPSEEK_VISION_MODEL)
+            || (matches!(self.upstream_protocol, ResponsesGatewayUpstream::ChatCompletions { dialect: ChatDialect::Qwen })
+                && matches!(self.upstream_model.trim().to_ascii_lowercase().as_str(),
+                    "qwen3.8-max" | "qwen3.8-max-preview" | "qwen3.8-max-0902" | "qwen3.8-max-2026-09-02" | "qwen3.8-flash"))
     }
 
     pub fn with_model_alias(mut self, alias: impl Into<String>) -> Self {
@@ -445,7 +448,7 @@ pub(crate) fn upstream_stream_failure(
     match error {
         eventsource_stream::EventStreamError::Transport(error) if error.is_timeout() => (
             "simple_upstream_stream_timeout",
-            "模型响应超时：已连接模型服务，但响应流未在配置时限内完成。请检查已有工具结果后再决定是否重试。",
+            "模型响应等待超时：已连接模型服务，但连续未收到数据的时间超过设置。请检查网络或提高模型设置中的无响应等待时间；重试前检查已有工具结果。",
         ),
         eventsource_stream::EventStreamError::Transport(_) => (
             "simple_upstream_stream_disconnected",
@@ -551,6 +554,16 @@ mod tests {
     use axum::routing::post;
 
     use super::*;
+
+    #[test]
+    fn qwen_visual_capabilities_are_model_specific() {
+        for model in ["qwen3.8-max", "qwen3.8-flash", "qwen3.8-max-0902", "qwen3.8-max-2026-09-02"] {
+            assert!(ResponsesGatewayConfig::new("http://localhost",model,None).with_chat_completions(ChatDialect::Qwen).supports_images());
+        }
+        for model in ["qwen-plus", "qwen3.7-max", "qwen-text-fixture"] {
+            assert!(!ResponsesGatewayConfig::new("http://localhost",model,None).with_chat_completions(ChatDialect::Qwen).supports_images());
+        }
+    }
 
     #[test]
     fn image_routing_ignores_text_and_other_provider_routes() {
