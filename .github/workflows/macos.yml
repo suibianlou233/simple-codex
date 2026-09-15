@@ -37,7 +37,7 @@ jobs:
       - run: cargo check --locked -p local-agent-desktop
       - run: cargo test --locked --lib -p local-agent-model kernel_compat::package::tests
       - run: cargo test --locked --lib -p local-agent-model kernel_compat::codex_process::unix_tests
-      - run: cargo test --locked --lib -p local-agent-desktop browser::
+      - run: "cargo test --locked --lib -p local-agent-desktop browser::"
   package:
     if: github.event_name == 'workflow_dispatch' && inputs.package
     needs: check
