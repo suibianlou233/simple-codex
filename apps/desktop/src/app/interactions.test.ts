@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composerHeight, emptyConversationLabel, isComposingKey, shouldSubmitMessage, toggleInspector } from "./interactions";
+import { composerHeight, isComposingKey, shouldSubmitMessage } from "./interactions";
 
 describe("composer interaction", () => {
   const enter = { key: "Enter", shiftKey: false, isComposing: false, keyCode: 13 };
@@ -24,18 +24,5 @@ describe("composer interaction", () => {
     expect(composerHeight(98)).toBe(98);
     expect(composerHeight(900)).toBe(180);
     expect(composerHeight(0)).toBe(34);
-  });
-});
-
-describe("workspace navigation", () => {
-  it("opens, switches and closes the inspector with the same control", () => {
-    expect(toggleInspector(undefined, "files")).toBe("files");
-    expect(toggleInspector("files", "diff")).toBe("diff");
-    expect(toggleInspector("diff", "diff")).toBeUndefined();
-  });
-  it("distinguishes an empty project from an empty search", () => {
-    expect(emptyConversationLabel(true, "abc")).toContain("没有找到匹配");
-    expect(emptyConversationLabel(true, "  ")).toBe("还没有对话");
-    expect(emptyConversationLabel(false, "abc")).toContain("打开项目后");
   });
 });

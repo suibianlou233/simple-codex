@@ -1,0 +1,54 @@
+/* Simple theme adaptation of assistant-ui's standalone Reasoning. */
+.aui-reasoning-root {
+  --reasoning-bg: var(--surface-subtle);
+  width: 100%; min-width: 0; margin: 0 0 20px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--reasoning-bg); color: var(--text-secondary);
+  overflow: hidden;
+}
+.aui-reasoning-root[data-variant="ghost"] { border: 0; background: transparent; }
+.aui-reasoning-root .aui-reasoning-trigger {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  min-height: 46px; padding: 12px 14px; margin: 0;
+  border: 0; border-radius: 11px; background: transparent;
+  color: var(--text-secondary); font: inherit; font-size: 12px;
+  line-height: 1.6; text-align: left; cursor: pointer;
+}
+.aui-reasoning-root .aui-reasoning-trigger:hover { color: var(--text); background: var(--surface-hover); }
+.aui-reasoning-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.aui-reasoning-trigger-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--accent-text); }
+.aui-reasoning-trigger-label-wrapper { min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.aui-reasoning-trigger-chevron { width: 14px; height: 14px; flex-shrink: 0; margin-left: auto; transform: rotate(-90deg); transition: transform 200ms ease; }
+.aui-reasoning-trigger[data-state="open"] .aui-reasoning-trigger-chevron { transform: rotate(0deg); }
+.aui-reasoning-trigger[data-active="true"] .aui-reasoning-trigger-label-wrapper {
+  background: linear-gradient(110deg, var(--text-secondary) 25%, var(--text) 45%, var(--text-secondary) 65%);
+  background-size: 220% 100%; background-clip: text; color: transparent;
+  animation: simple-reasoning-shimmer 2.4s linear infinite;
+}
+.aui-reasoning-content { position: relative; min-width: 0; overflow: hidden; }
+.aui-reasoning-content[data-state="closed"] { display: none; }
+.aui-reasoning-content[data-state="open"] { animation: simple-reasoning-reveal 200ms ease-out; }
+.aui-reasoning-text { position: relative; max-height: 256px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 12px 18px 18px 38px; line-height: 1.8; }
+.aui-reasoning-text-content { min-width: 0; border-left: 1px solid var(--border-strong); padding-left: 14px; }
+.aui-reasoning-root .chat-message { display: block; margin: 0 0 14px; padding: 0; background: transparent; border: 0; }
+.aui-reasoning-root .chat-message:last-child { margin-bottom: 0; }
+.aui-reasoning-root .message-column { display: block; width: 100%; max-width: none; min-width: 0; }
+.aui-reasoning-root .markdown-message { font-size: 13px; line-height: 1.85; color: var(--text-secondary); overflow-wrap: anywhere; }
+.aui-reasoning-root .markdown-message p { margin: 0 0 10px; }
+.aui-reasoning-root .markdown-message p:last-child { margin-bottom: 0; }
+.aui-reasoning-root .message-actions { display: none; }
+.aui-reasoning-root .chat-commentary::before,
+.aui-reasoning-root .chat-commentary .message-column::before { display: none; }
+.aui-reasoning-root .turn-elapsed { color: var(--text-tertiary); font-size: 11px; }
+.aui-reasoning-fade { position: absolute; left: 0; right: 0; height: 10px; z-index: 1; pointer-events: none; }
+.aui-reasoning-fade[data-side="top"] { top: 0; background: linear-gradient(to bottom, var(--reasoning-bg), transparent); }
+.aui-reasoning-fade[data-side="bottom"] { bottom: 0; background: linear-gradient(to top, var(--reasoning-bg), transparent); }
+@keyframes simple-reasoning-shimmer { to { background-position: -220% 0; } }
+@keyframes simple-reasoning-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 520px) {
+  .aui-reasoning-text { padding-left: 20px; padding-right: 12px; }
+  .aui-reasoning-root .aui-reasoning-trigger { padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aui-reasoning-root *, .aui-reasoning-root *::before { animation: none !important; transition: none !important; }
+}

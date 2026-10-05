@@ -207,7 +207,7 @@ export function AgentSettings({
             </section>
           </>
         )}
-        {capabilities && !capabilities.memoryUnavailableReason ? <ProjectMemoryPanel bridge={bridge} taskId={taskId} revision={memoryRevision} /> : null}
+        {(!capabilities || !capabilities.memoryUnavailableReason) ? <ProjectMemoryPanel bridge={bridge} taskId={taskId} revision={memoryRevision} /> : null}
       </section>
     </div>
   );

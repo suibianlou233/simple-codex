@@ -1,10 +1,11 @@
+import {editorMenu} from "./editorMenuHelper";
 import { test, expect } from "@playwright/test";
 test("mode switching preserves editor drafts, selection attaches, and stale files never silently overwrite",async({page},info)=>{
   await page.goto("/tests/ui/fixture.html?scenario=code");
   await page.getByRole("combobox",{name:"工作模式"}).selectOption("code");
   await page.locator(".code-tree-row").getByRole("button",{name:"▸ ▣ src",exact:true}).click();
   await page.locator(".code-tree-row").getByRole("button",{name:"· main.ts",exact:true}).click();
-  const editor=page.locator(".code-editor-area .cm-content").last();
+  const editor=page.locator(".code-editor-area .monaco-editor .view-lines").last();
   await expect(editor).toContainText("Hello Simple");
   await editor.click();await page.keyboard.press("Control+End");await page.keyboard.type("// manual edit");
   await page.getByRole("combobox",{name:"工作模式"}).selectOption("simple");
@@ -12,20 +13,41 @@ test("mode switching preserves editor drafts, selection attaches, and stale file
   await page.getByRole("combobox",{name:"工作模式"}).selectOption("code");
   await expect(editor).toContainText("manual edit");
   await editor.click();await page.keyboard.press("Control+a");
-  await page.getByRole("button",{name:"选区加入对话",exact:true}).click();
-  await expect(page.locator(".composer")).toContainText("粘贴");
+  await (await editorMenu(page,"选区加入对话")).click();
+  await expect(page.locator(".composer")).toContainText("src/main.ts");
   await page.evaluate(async()=>{const modulePath="/node_modules/@tauri-apps/api/core.js";const api=await import(modulePath);await api.invoke("test_external");window.dispatchEvent(new Event("focus"));});
   await expect(page.getByText("文件已在外部修改。你的编辑仍保留，请比较后合并。",{exact:false})).toBeVisible();
   await expect(editor).toContainText("manual edit");
-  await expect(page.getByRole("button",{name:"保存",exact:true})).toBeDisabled();
+  await expect((await editorMenu(page,"保存"))).toBeDisabled();
+  await page.keyboard.press("Escape");
   await page.getByRole("button",{name:"比较",exact:true}).click();
-  await expect(page.locator(".code-compare-half").first()).toContainText("AI changed");
+  await expect(page.getByRole("region",{name:"修改差异"})).toContainText("AI changed");
   await page.screenshot({path:info.outputPath("simple-code-conflict.png")});
   await page.getByRole("button",{name:"保留编辑，以磁盘版本为保存基准"}).click();
-  await page.getByRole("button",{name:"保存",exact:true}).click();
-  await expect(page.locator(".code-status")).toContainText("已保存");
-  await page.getByRole("button",{name:"返回编辑",exact:true}).click();
+  await (await editorMenu(page,"保存")).click();
+  await expect(page.locator(".code-status")).not.toContainText("未保存");
+  await (await editorMenu(page,"返回编辑")).click();
   await page.screenshot({path:info.outputPath("simple-code.png")});
   await page.reload();
   await expect(page.getByRole("combobox",{name:"工作模式"})).toHaveValue("code");
+});
+
+
+test("Monaco preserves CRLF on save and Molecule tabs protect dirty buffers",async({page})=>{
+ await page.goto("/tests/ui/fixture.html?scenario=code");
+ await page.evaluate(async()=>{const path="/node_modules/@tauri-apps/api/core.js";const api=await import(path);await api.invoke("test_crlf");await api.invoke("test_create_external");});
+ await page.getByRole("combobox",{name:"工作模式"}).selectOption("code");
+ await page.locator(".code-tree-row").getByRole("button",{name:"▸ ▣ src",exact:true}).click();
+ await page.locator(".code-tree-row").getByRole("button",{name:"· main.ts",exact:true}).click();
+ const editor=page.locator(".code-editor-area .monaco-editor .view-lines");
+ await editor.click();await page.keyboard.press("Control+End");await page.keyboard.type("// edit");await page.keyboard.press("Control+s");
+ await expect.poll(()=>page.evaluate(()=>(window as unknown as {__editorSaves:{content:string}[]}).__editorSaves.at(-1)?.content)).toBe("export const greeting = 'Hello Simple';\r\n// second line\r\n// edit");
+ await page.keyboard.type(" dirty");
+ await page.locator(".code-tree-row").getByRole("button",{name:"· added.ts",exact:true}).click();
+ const tab=page.locator(".mo-tab__item").filter({hasText:"main.ts"});await tab.click();
+ await expect(editor).toContainText("dirty");
+ await tab.locator(".mo-tab__item__extra").click();await expect(page.getByText("有未保存的修改。",{exact:false})).toBeVisible();
+ await page.getByRole("button",{name:"继续编辑",exact:true}).click();await expect(editor).toContainText("dirty");
+ await tab.locator(".mo-tab__item__extra").click();await page.getByRole("button",{name:"放弃修改并关闭文件",exact:true}).click();
+ await expect(page.locator(".molecule-breadcrumb")).toContainText("added.ts");
 });

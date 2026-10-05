@@ -20,11 +20,12 @@ export async function sendConversationMessage(
   taskId: string | undefined,
   content: string,
   permissionLevel: PermissionLevel,
+  contextMode?: "simple" | "code",
 ): Promise<"started" | "continued"> {
   if (taskId) {
-    await bridge.sendMessage(taskId, content);
+    if(contextMode)await bridge.sendMessage(taskId, content, contextMode);else await bridge.sendMessage(taskId,content);
     return "continued";
   }
-  await bridge.startChat(projectId, content, permissionLevel);
+  if(contextMode)await bridge.startChat(projectId,content,permissionLevel,contextMode);else await bridge.startChat(projectId,content,permissionLevel);
   return "started";
 }

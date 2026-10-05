@@ -1,3 +1,8 @@
+import {invoke} from "@tauri-apps/api/core";
+import {ComposerQueueProvider} from "../components/ComposerQueue";
+import {ConversationBoundary, ThreadPrimitive} from "../components/assistant-ui/conversation";
+import {contextKey,snapshotForMode,taskMode} from "./contextModes";
+
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { desktopBridge } from "../bridge";
@@ -22,11 +27,12 @@ import { ModelSettings } from "../settings/ModelSettings";
 import { FirstRunGuide } from "../components/FirstRunGuide";
 import { markGuideSeen, shouldShowGuide } from "./onboarding";
 import { toMessage } from "./feedback";
-import { TerminalPanel } from "../panels/WorkspacePanels";
+import { TerminalPanel } from "../panels/TerminalPanel";
 import type { TextDocument } from "../items/UserMessage";
 import { CopyButton } from "../components/CopyButton";
 import { WindowControls } from "../components/WindowControls";
-import { CodeWorkspace } from "../code/CodeWorkspace";
+import {lazy, Suspense} from "react";
+const CodeWorkspace = lazy(() => import("../code/CodeWorkspace").then(module => ({default: module.CodeWorkspace})));
 import { projectRelativePath } from "../code/editorModel";
 import { FileOpenContext } from "../code/FileOpenContext";
 import {
@@ -74,13 +80,26 @@ export function App({ bridge = desktopBridge }: AppProps) {
   });
   const modeKey = snapshot?.activeProjectId ?? "welcome";
   const codeMode = modes[modeKey] === "code";
-  const setCodeMode = (enabled: boolean) => setModes(previous => {
+  const [codeWasOpened,setCodeWasOpened]=useState(codeMode);
+  useEffect(()=>{if(codeMode)setCodeWasOpened(true);},[codeMode]);
+  const setCodeMode = (enabled: boolean) => {if(isBusy||isSettingsOpen)return;setTerminalOpen(false);setBrowserOpen(false);setTextDocument(undefined);setSearchOpen(false);setModes(previous => {
     const next = {...previous, [modeKey]: enabled ? "code" : "simple"};
     localStorage.setItem("simple.ui.projectModes", JSON.stringify(next)); return next;
-  });
-  const [fileRequest, setFileRequest] = useState<{path:string;nonce:number;projectId:string}>();
+  });};
+  const [fileRequest, setFileRequest] = useState<{path:string;nonce:number;projectId:string;line?:number;column?:number}>();
+  const [referenceRequest,setReferenceRequest]=useState(0);
   const [editorModalOpen, setEditorModalOpen] = useState(false);
-  const [isNewConversation, setIsNewConversation] = useState(false);
+  const contextMode=codeMode?"code":"simple";
+  const scopeKey=contextKey(snapshot?.activeProjectId,contextMode);
+  const [selections,setSelections]=useState<Record<string,string>>(()=>{try{return JSON.parse(localStorage.getItem("simple.ui.modeSelections")??"{}");}catch{return {};}});
+  const [newConversations,setNewConversations]=useState<Record<string,boolean>>(()=>{try{return JSON.parse(localStorage.getItem("simple.ui.modeNewDrafts")??"{}");}catch{return {};}});
+  const isNewConversation=newConversations[scopeKey]??false;
+  const setIsNewConversation=(value:boolean)=>setNewConversations(previous=>({...previous,[scopeKey]:value}));
+  useEffect(()=>{localStorage.setItem("simple.ui.modeNewDrafts",JSON.stringify(newConversations));},[newConversations]);
+  useEffect(()=>{localStorage.setItem("simple.ui.modeSelections",JSON.stringify(selections));},[selections]);
+  const matchingTasks=snapshot?.tasks.filter(t=>t.projectId===snapshot.activeProjectId&&taskMode(t)===contextMode&&!t.archived)??[];
+  const selectedTask=matchingTasks.find(t=>t.id===selections[scopeKey])??matchingTasks.find(t=>t.id===snapshot?.activeTaskId)??matchingTasks[0];
+  const activeTask=isNewConversation?undefined:selectedTask;
   const [isBusy, setIsBusy] = useState(false);
   const [isSkillsOpen, setIsSkillsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -90,7 +109,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
   const [sendAfterConfiguration, setSendAfterConfiguration] = useState(false);
   const [pendingConfiguredMessage, setPendingConfiguredMessage] = useState("");
   const [drafts, setDrafts] = useState<Record<string, { content: string; attachments: AttachmentSummary[]; pastes?: PastedTextBlock[] }>>({});
-  const currentDraftKey = draftKey(snapshot?.activeProjectId, isNewConversation ? undefined : snapshot?.activeTaskId);
+  const currentDraftKey = `${draftKey(snapshot?.activeProjectId, activeTask?.id)}:${contextMode}`;
   const composerDraft = drafts[currentDraftKey]?.content ?? "";
   const attachments = drafts[currentDraftKey]?.attachments ?? [];
   const setComposerDraft = (content: string) => setDrafts((all) => ({ ...all, [currentDraftKey]: { ...all[currentDraftKey], content, attachments: all[currentDraftKey]?.attachments ?? [] } }));
@@ -139,7 +158,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
     }).then(remove=>{if(stopped)remove();else unlisten=remove;}).catch(()=>undefined);
     return ()=>{stopped=true;unlisten?.();};
   }, [snapshot?.activeProjectId, snapshot?.projects]);
-  const restoredSelection = useRef(false);
+
   const timelineRef = useRef<HTMLDivElement>(null);
   const [followOutput, setFollowOutput] = useState(true);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
@@ -167,28 +186,15 @@ export function App({ bridge = desktopBridge }: AppProps) {
     if (projectionError) setError(toMessage(projectionError));
   }, [projectionError]);
 
-  useEffect(() => {
-    if (!snapshot || restoredSelection.current || typeof window === "undefined") return;
-    restoredSelection.current = true;
-    const savedTaskId = window.localStorage.getItem("simple.ui.activeTaskId");
-    if (savedTaskId && savedTaskId !== snapshot.activeTaskId && snapshot.tasks.some((task) => task.id === savedTaskId && !task.archived)) {
-      void bridge.selectTask(savedTaskId);
-    }
-  }, [bridge, snapshot]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (snapshot?.activeTaskId) window.localStorage.setItem("simple.ui.activeTaskId", snapshot.activeTaskId);
-  }, [snapshot?.activeTaskId]);
+  useEffect(()=>{
+    const selected=snapshot?.tasks.find(t=>t.id===snapshot.activeTaskId);
+    if(selected&&!selected.archived)setSelections(previous=>({...previous,[contextKey(selected.projectId,taskMode(selected))]:selected.id}));
+  },[snapshot?.activeTaskId]);
 
   const activeProject = snapshot?.projects.find(
     (project) => project.id === snapshot.activeProjectId,
   );
-  const selectedTask = snapshot?.tasks.find(
-    (task) => task.id === snapshot.activeTaskId,
-  );
-  const activeTask = isNewConversation ? undefined : selectedTask;
-  useEffect(() => setTextDocument(undefined), [activeTask?.id, activeProject?.id]);
+  useEffect(() => setTextDocument(undefined), [activeTask?.id, activeProject?.id,contextMode]);
   useEffect(() => {
     if (terminalOpen && activeTask) setTerminalTasks(current => current.includes(activeTask.id) ? current : [...current, activeTask.id]);
   }, [terminalOpen, activeTask?.id]);
@@ -197,23 +203,25 @@ export function App({ bridge = desktopBridge }: AppProps) {
   );
   const activeTimeline = useMemo(
     () =>
-      snapshot?.timeline.filter((entry) => entry.taskId === snapshot.activeTaskId) ?? [],
-    [snapshot],
+      snapshot?.timeline.filter((entry) => entry.taskId === activeTask?.id) ?? [],
+    [snapshot,activeTask?.id],
   );
   const activeActions = useMemo(
-    () => snapshot?.actions.filter((action) => action.taskId === snapshot.activeTaskId) ?? [],
-    [snapshot],
+    () => snapshot?.actions.filter((action) => action.taskId === activeTask?.id) ?? [],
+    [snapshot,activeTask?.id],
   );
   const activeTurns = useMemo(
-    () => snapshot?.turns.filter((turn) => turn.taskId === snapshot.activeTaskId) ?? [],
-    [snapshot],
+    () => snapshot?.turns.filter((turn) => turn.taskId === activeTask?.id) ?? [],
+    [snapshot,activeTask?.id],
   );
+  const activeTurnId=activeTurns.find(turn=>turn.status==="running")?.id??null;
+  const modeSnapshot=snapshot?snapshotForMode(snapshot,contextMode):undefined;
   const activeContextUsage = snapshot?.contextUsage.find(
     (usage) => usage.taskId === activeTask?.id,
   );
   useEffect(() => {
     setFollowOutput(true);
-  }, [snapshot?.activeTaskId]);
+  }, [activeTask?.id,contextMode]);
   useEffect(() => {
     if (!followOutput) return;
     const element = timelineRef.current;
@@ -242,6 +250,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
   };
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || (event.target instanceof Element && event.target.closest(".code-workspace"))) return;
       if (!(event.ctrlKey || event.metaKey) || event.altKey || isSettingsOpen || isSkillsOpen || isAgentSettingsOpen || isGuideOpen) return;
       if (event.key.toLowerCase() === "k") { event.preventDefault(); setSearchOpen((open) => !open); }
       if (event.key.toLowerCase() === "b") { event.preventDefault(); setSidebarCollapsed((collapsed) => !collapsed); }
@@ -262,32 +271,30 @@ export function App({ bridge = desktopBridge }: AppProps) {
   return (
     <FileOpenContext.Provider value={activeProject ? href => {
       const path = projectRelativePath(href, activeProject.path);
-      if (path) {setCodeMode(true);setFileRequest({path,nonce:Date.now(),projectId:activeProject.id});}
+      if (path) {setCodeMode(true);setFileRequest({path,line:Number(href.match(/(?:#L|:)(\d+)(?::\d+)?$/)?.[1]??1),column:Number(href.match(/:\d+:(\d+)$/)?.[1]??1),nonce:Date.now(),projectId:activeProject.id});}
     } : undefined}>
-    <AttachmentProjectContext.Provider value={activeProject?.id}>
+    <ConversationBoundary entries={activeTimeline} running={Boolean(snapshot.activeTurnId)}><AttachmentProjectContext.Provider value={activeProject?.id}>
     {mediaAvailable ? <BrowserApproval onVisibilityChange={setBrowserApprovalOpen} taskNames={Object.fromEntries(snapshot.tasks.map(task => [task.id, task.title]))} /> : null}
     <main style={{"--right-panel-width": `${visiblePanelWidth}px`} as CSSProperties} className={`app-shell has-mode-bar${codeMode ? " code-mode" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${browserOpen && activeProject ? " has-browser" : ""}${textDocument || (browserOpen && activeProject) || (terminalOpen && activeTask) ? " has-right-panel" : ""}${resizingPanel ? " is-resizing-panel" : ""}`}>
       <div className="simple-mode-bar" data-tauri-drag-region>
-        <select aria-label="工作模式" value={codeMode ? "code" : "simple"} onChange={event=>setCodeMode(event.target.value==="code")}><option value="simple">Simple</option><option value="code">Simple Code</option></select>
+        <select aria-label="工作模式" disabled={isBusy||isSettingsOpen} value={codeMode ? "code" : "simple"} onChange={event=>setCodeMode(event.target.value==="code")}><option value="simple">Simple</option><option value="code">Simple Code</option></select>
         {codeMode ? <>
           <select aria-label="当前项目" value={activeProject?.id ?? ""} onChange={event=>void run(async()=>{await bridge.selectProject(event.target.value);setIsNewConversation(true);})}><option value="" disabled>选择项目</option>{snapshot.projects.map(project=><option key={project.id} value={project.id}>{project.name}</option>)}</select>
           <button onClick={()=>void run(async()=>{await bridge.openProject();setIsNewConversation(true);})}>打开文件夹</button>
-          <select aria-label="当前对话" value={activeTask?.id ?? ""} onChange={event=>{if(!event.target.value)beginNewConversation();else void run(async()=>{await bridge.selectTask(event.target.value);setIsNewConversation(false);});}}><option value="">新对话</option>{snapshot.tasks.filter(task=>task.projectId===activeProject?.id).map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select>
-          <button onClick={beginNewConversation}>＋ 新对话</button>
           <span className="window-drag-spacer" data-tauri-drag-region aria-hidden="true"/>
           <nav className="code-tools" aria-label="右侧工具"><button aria-pressed={!terminalOpen&&!browserOpen&&!textDocument} onClick={()=>{setTerminalOpen(false);setBrowserOpen(false);setTextDocument(undefined);}}>AI</button><WorkspaceNavigation terminalOpen={terminalOpen} browserOpen={browserOpen} terminalDisabled={!activeTask} browserDisabled={!activeProject||!mediaAvailable} onTerminalToggle={()=>{setTextDocument(undefined);setBrowserOpen(false);setTerminalOpen(v=>!v);}} onBrowserToggle={()=>{setTextDocument(undefined);setTerminalOpen(false);setBrowserOpen(v=>!v);}}/></nav>
         </> : <><span data-tauri-drag-region>{activeProject?.name ?? "本地工作区"}</span><span className="window-drag-spacer" data-tauri-drag-region aria-hidden="true"/></>}
         <WindowControls onError={setError}/>
       </div>
-      <CodeWorkspace project={activeProject} visible={codeMode} dark={resolvedTheme==="dark"} request={fileRequest?.projectId===activeProject?.id?fileRequest:undefined} onModalVisibility={setEditorModalOpen}
+      {codeMode || codeWasOpened ? <Suspense fallback={<section className="code-workspace" hidden={!codeMode}><div className="code-empty">加载编辑器…</div></section>}><CodeWorkspace project={activeProject} visible={codeMode} dark={resolvedTheme==="dark"} request={fileRequest?.projectId===activeProject?.id?fileRequest:undefined} onModalVisibility={setEditorModalOpen} referenceRequest={referenceRequest} profileId={activeModel?.id} bridge={bridge} taskId={activeTask?.id} actions={activeActions} turns={activeTurns}
         onOpenProject={()=>void run(async()=>{await bridge.openProject();setIsNewConversation(true);})}
-        onAttach={text=>{setDrafts(all=>{const current=all[currentDraftKey];return {...all,[currentDraftKey]:{content:current?.content??"",attachments:current?.attachments??[],pastes:[...(current?.pastes??[]),{id:crypto.randomUUID(),text}]}};});setTerminalOpen(false);setBrowserOpen(false);setTextDocument(undefined);}}/>
+        onAttach={block=>{setDrafts(all=>{const current=all[currentDraftKey];return {...all,[currentDraftKey]:{content:current?.content??"",attachments:current?.attachments??[],pastes:[...(current?.pastes??[]),block]}};});setTerminalOpen(false);setBrowserOpen(false);setTextDocument(undefined);}}/></Suspense> : null}
       {codeMode ? <div className="code-panel-resizer" role="separator" aria-label="调整 AI 侧栏宽度" aria-orientation="vertical" tabIndex={0}
         onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);setResizingPanel(true);}}
         onPointerMove={event=>{if(event.currentTarget.hasPointerCapture(event.pointerId))resizePanel(window.innerWidth-event.clientX);}}
         onPointerUp={event=>{event.currentTarget.releasePointerCapture(event.pointerId);setResizingPanel(false);}}
         onLostPointerCapture={()=>setResizingPanel(false)} onKeyDown={event=>{if(event.key==="ArrowLeft"||event.key==="ArrowRight"){event.preventDefault();resizePanel(visiblePanelWidth+(event.key==="ArrowLeft"?24:-24));}}}/> : null}
-      {!sidebarCollapsed ? <Sidebar snapshot={snapshot} activeTaskId={activeTask?.id} busy={isBusy}
+      {!sidebarCollapsed ? <Sidebar snapshot={modeSnapshot!} activeTaskId={activeTask?.id} busy={isBusy}
         operationError={error}
         onArchive={(task, archived) => run(async () => { await bridge.setTaskArchived(task.id, archived); setNotice(archived ? "对话已归档" : "对话已恢复"); })}
         onDelete={(task) => run(async () => {
@@ -307,8 +314,10 @@ export function App({ bridge = desktopBridge }: AppProps) {
         onDiagnostics={() => void run(async () => { const path = await bridge.exportDiagnostics(); if (path) setNotice(`诊断报告已导出到 ${path}`); })}
       /> : null}
 
-      <section className={`workspace${activeTask ? "" : " workspace-welcome"}`}>
-        <header className="workspace-header">
+      <ThreadPrimitive.Root asChild><section className={`workspace${activeTask ? "" : " workspace-welcome"}`}>
+        {codeMode?<header className="code-chat-header"><span className="code-chat-tab">Agent</span><div className="code-chat-session">          <select aria-label="当前对话" value={activeTask?.id ?? ""} onChange={event=>{if(!event.target.value)beginNewConversation();else void run(async()=>{await bridge.selectTask(event.target.value);setIsNewConversation(false);});}}><option value="">新对话</option>{modeSnapshot!.tasks.filter(task=>task.projectId===activeProject?.id&&!task.archived).map(task=><option key={task.id} value={task.id}>{task.title}</option>)}</select>
+          <button onClick={beginNewConversation} aria-label="新建代码对话" title="新建对话">＋</button>
+</div></header>:<header className="workspace-header">
           <div className="workspace-heading">
             {sidebarCollapsed ? <button className="icon-button" onClick={() => setSidebarCollapsed(false)} aria-label="展开侧栏" title="展开侧栏（Ctrl/⌘+B）"><Icon name="sidebar" /></button> : null}
             <span className={`workspace-status${activeTask ? ` status-${activeTask.status}` : ""}`} aria-hidden="true" />
@@ -321,7 +330,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
             terminalDisabled={!activeTask} browserDisabled={!mediaAvailable}
             onTerminalToggle={() => { setTextDocument(undefined); setBrowserOpen(false); setTerminalOpen(value => !value); }}
             onBrowserToggle={() => { setTextDocument(undefined); setTerminalOpen(false); setBrowserOpen(value => !value); }} /> : null}
-        </header>
+        </header>}
 
         <div className="workspace-banners">
           {error ? (
@@ -339,8 +348,8 @@ export function App({ bridge = desktopBridge }: AppProps) {
             </div>
           ) : null}
         </div>
-        <div
-          className="timeline"
+        <ThreadPrimitive.Viewport autoScroll={false}
+          className="timeline aui-thread-viewport"
           aria-label="对话记录"
           ref={timelineRef}
           onScroll={(event) => {
@@ -354,7 +363,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
               entries={activeTimeline}
               onOpenText={document => {setTextDocument(document);setBrowserOpen(false);setTerminalOpen(false);}}
               actions={activeActions}
-              activeTurnId={snapshot.activeTurnId}
+              activeTurnId={activeTurnId}
               turns={activeTurns}
               disabled={isBusy}
               onApprove={async (actionId) => { await run(() => bridge.approveAction(actionId)); }}
@@ -375,6 +384,8 @@ export function App({ bridge = desktopBridge }: AppProps) {
                 if (branched) setIsNewConversation(false);
               }}
             />
+          ) : codeMode ? (
+            <div className="code-chat-empty"><strong>开始一个开发任务</strong><p>提问、修改代码，或用 @ 引用项目文件。</p><span>Ctrl / ⌘ K 修改选区</span></div>
           ) : (
             <EmptyWorkspace
               hasProject={Boolean(activeProject)}
@@ -386,7 +397,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
               })}
             />
           )}
-        </div>
+        </ThreadPrimitive.Viewport>
         {!followOutput && activeTask ? (
           <button
             className="resume-follow"
@@ -401,8 +412,12 @@ export function App({ bridge = desktopBridge }: AppProps) {
           </button>
         ) : null}
 
+        <ComposerQueueProvider key={currentDraftKey} taskId={activeTask?.id} bridge={bridge} turns={activeTurns} onSteer={(turnId,content)=>invoke("steer_turn",{turnId,content})}>
         <Composer
+          onQueued={() => {const submitted = drafts[currentDraftKey]; setDrafts(all => all[currentDraftKey] !== submitted ? all : {...all, [currentDraftKey]: {content: "", attachments: [], pastes: []}});}}
+          variant={codeMode?"code":"simple"}
           key={currentDraftKey}
+          onReference={codeMode?()=>setReferenceRequest(v=>v+1):undefined}
           pastes={drafts[currentDraftKey]?.pastes ?? []}
           onTextPaste={(text, start, end) => setDrafts(all => {
             const current = all[currentDraftKey];
@@ -412,7 +427,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
           onEditPaste={(id, text) => setDrafts(all => {
             const current = all[currentDraftKey];
             if (!current) return all;
-            return {...all, [currentDraftKey]: {...current, pastes: current.pastes?.map(block => block.id === id ? {...block, text} : block)}};
+            return {...all, [currentDraftKey]: {...current, pastes: current.pastes?.map(block => block.id === id ? {...block, text, source:block.label?"手动编辑的引用快照":undefined} : block)}};
           })}
           onRemovePaste={id => setDrafts(all => {
             const current = all[currentDraftKey];
@@ -426,8 +441,8 @@ export function App({ bridge = desktopBridge }: AppProps) {
           onModelChange={(id) => run(() => bridge.selectModelProfile(id))}
           onModelSettings={() => { setSendAfterConfiguration(false); setIsSettingsOpen(true); }}
           contextUsage={activeContextUsage}
-          phase={snapshot.turns.find((turn) => turn.id === snapshot.activeTurnId)?.phase}
-          activeTurnId={snapshot.activeTurnId}
+          phase={snapshot.turns.find((turn) => turn.id === activeTurnId)?.phase}
+          activeTurnId={activeTurnId}
           disabled={isBusy}
           content={composerDraft}
           attachments={attachments}
@@ -477,6 +492,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
                 activeTask?.id,
                 content,
                 activeTask?.permissionLevel ?? newConversationPermission,
+                contextMode,
               );
               if (mode === "started") setIsNewConversation(false);
             });
@@ -493,7 +509,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
             if (installed) setNotice("项目沙箱已安装并通过健康检查");
             return installed;
           }}
-          permissionDisabled={Boolean(snapshot.activeTurnId) || isBusy || !activeProject}
+          permissionDisabled={Boolean(activeTurnId) || isBusy || !activeProject}
           onPermissionChange={async (permissionLevel) => {
             if (!activeTask) {
               setNewConversationPermission(permissionLevel);
@@ -503,8 +519,8 @@ export function App({ bridge = desktopBridge }: AppProps) {
             if (changed) setNewConversationPermission(permissionLevel);
             return changed;
           }}
-        />
-      </section>
+        /></ComposerQueueProvider>
+      </section></ThreadPrimitive.Root>
 
       {textDocument || (activeProject && browserOpen) || terminalTasks.length > 0 ? <aside className="right-panel" hidden={!textDocument && !browserOpen && !terminalOpen} aria-label="右侧工作区">
         <div className="right-panel-resizer" role="separator" aria-label="调整右侧栏宽度" aria-orientation="vertical" tabIndex={0}
@@ -526,11 +542,11 @@ export function App({ bridge = desktopBridge }: AppProps) {
           onClose={()=>setBrowserOpen(false)}
           onAttach={attachment => setAttachments(current => current.some(item => item.path === attachment.path) ? current : [...current, attachment])} /> : null}
         {terminalTasks.map(taskId => <div key={taskId} className="terminal-slot" hidden={!terminalOpen || taskId !== activeTask?.id}>
-          <TerminalPanel bridge={bridge} taskId={taskId} onClose={() => setTerminalOpen(false)} />
+          <TerminalPanel onSendError={text=>{setDrafts(all=>{const current=all[currentDraftKey];return {...all,[currentDraftKey]:{content:current?.content??"",attachments:current?.attachments??[],pastes:[...(current?.pastes??[]),{id:crypto.randomUUID(),label:"终端报错",source:"终端选区",text}]}};});setTerminalOpen(false);setBrowserOpen(false);setTextDocument(undefined);}} taskId={taskId} onClose={() => setTerminalOpen(false)} />
         </div>)}
       </aside> : null}
 
-      {searchOpen ? <TaskSearch snapshot={snapshot} onClose={() => setSearchOpen(false)} onSelect={(task) => { void run(async () => { await bridge.selectTask(task.id); setIsNewConversation(false); setNewConversationPermission(task.permissionLevel); setSearchOpen(false); }); }} /> : null}
+      {searchOpen ? <TaskSearch snapshot={modeSnapshot!} onClose={() => setSearchOpen(false)} onSelect={(task) => { void run(async () => { await bridge.selectTask(task.id); setIsNewConversation(false); setNewConversationPermission(task.permissionLevel); setSearchOpen(false); }); }} /> : null}
       {isSettingsOpen ? (
         <ModelSettings
           onManageSkills={() => { setIsSettingsOpen(false); setIsSkillsOpen(true); }}
@@ -554,6 +570,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
                   activeTask?.id,
                   content,
                   activeTask?.permissionLevel ?? newConversationPermission,
+                contextMode,
                 );
                 if (mode === "started") setIsNewConversation(false);
                 setDrafts(all => ({...all, [currentDraftKey]: {content: "", attachments: [], pastes: []}}));
@@ -581,7 +598,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
         }} />
       ) : null}
     </main>
-    </AttachmentProjectContext.Provider>
+    </AttachmentProjectContext.Provider></ConversationBoundary>
     </FileOpenContext.Provider>
   );
 }

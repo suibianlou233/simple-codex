@@ -88,6 +88,7 @@ fn running_fixture() -> (tempfile::TempDir, DesktopRuntime, PreparedCodexTurn) {
         .expect("profile");
     let prepared = runtime
         .prepare_codex_new_chat(&StartChatInput {
+            context_mode: Default::default(),
             project_id,
             profile_id: None,
             content: "fixture".into(),
@@ -154,7 +155,11 @@ fn pending_completion_keeps_lease_stop_target_and_running_state_until_final_obse
             .is_some()
     );
     assert!(runtime.project_leases.contains_key(turn));
-    assert!(runtime.project_execution_busy(task, None).expect("project remains busy"));
+    assert!(
+        runtime
+            .project_execution_busy(task, None)
+            .expect("project remains busy")
+    );
     assert!(
         runtime
             .storage
@@ -187,7 +192,14 @@ fn pending_completion_keeps_lease_stop_target_and_running_state_until_final_obse
             .is_none()
     );
     assert!(!runtime.project_leases.contains_key(turn));
-    assert!(!runtime.storage.load_events(task).expect("events").iter().any(|event| event.event_type.starts_with("review_")));
+    assert!(
+        !runtime
+            .storage
+            .load_events(task)
+            .expect("events")
+            .iter()
+            .any(|event| event.event_type.starts_with("review_"))
+    );
     assert_eq!(
         runtime.snapshot().expect("snapshot").turns[0].status,
         "completed"

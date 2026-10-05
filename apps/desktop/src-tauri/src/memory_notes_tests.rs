@@ -243,6 +243,7 @@ fn manual_memory_is_shared_by_project_tasks_not_model_profiles_or_other_projects
             .to_string();
         let next = runtime
             .prepare_codex_new_chat(&StartChatInput {
+                context_mode: Default::default(),
                 project_id,
                 profile_id: None,
                 content: "next".into(),

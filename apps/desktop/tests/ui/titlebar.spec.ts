@@ -15,6 +15,7 @@ test("one toolbar keeps window controls reachable and requests safe close",async
   await page.getByRole("button",{name:"还原窗口",exact:true}).click();
   await page.getByRole("button",{name:"最小化窗口",exact:true}).click();
   await page.getByRole("button",{name:"关闭窗口",exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>(window as unknown as {__windowCalls:string[]}).__windowCalls)).toContain("plugin:window|close");
   const calls=await page.evaluate(()=>(window as unknown as {__windowCalls:string[]}).__windowCalls);
   expect(calls).toContain("plugin:window|minimize");
   expect(calls).toContain("plugin:window|close");

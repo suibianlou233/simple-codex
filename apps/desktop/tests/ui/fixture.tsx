@@ -12,14 +12,14 @@ import "../../src/code/code.css";
 import { installEditorMock } from "./editorMock";
 
 const scenario = new URLSearchParams(location.search).get("scenario");
-if (scenario === "code") installEditorMock();
+if (scenario === "code" || scenario === "contexts") installEditorMock();
 // Existing workbench cases model a returning user. Onboarding cases use the real first-run path.
 if (scenario !== "onboarding") localStorage.setItem(GUIDE_SEEN_KEY, "seen");
 const running = scenario === "approval" || scenario === "running" || scenario === "completion-wait" || scenario === "completion-unknown" || scenario === "submission-unknown" || scenario === "submission-cold";
 const updatedAt = new Date().toISOString();
 const tasks: DesktopSnapshot["tasks"] = [
-  { id: "ui-a", projectId: "project-a", title: "让任务切换更加顺手", goal: "优化输入草稿与工作区导航", status: running ? "running" : "completed", permissionLevel: "approval", updatedAt },
-  { id: "ui-b", projectId: "project-a", title: "整理项目启动文档", goal: "README 新手说明", status: "completed", permissionLevel: "approval", updatedAt },
+  { id: "ui-a", contextMode:scenario==="code"?"code":"simple", projectId: "project-a", title: "让任务切换更加顺手", goal: "优化输入草稿与工作区导航", status: running ? "running" : "completed", permissionLevel: "approval", updatedAt },
+  { id: "ui-b", contextMode:scenario==="code"?"code":"simple", projectId: "project-a", title: "整理项目启动文档", goal: "README 新手说明", status: "completed", permissionLevel: "approval", updatedAt },
   { id: "ui-c", projectId: "project-b", title: "检查配置读取的边界", goal: "配置读取错误信息", status: "failed", permissionLevel: "approval", updatedAt },
 ];
 class FixtureBridge extends MemoryDesktopBridge {
@@ -27,11 +27,6 @@ class FixtureBridge extends MemoryDesktopBridge {
     return { supported: true, summary: `${taskId} · Git 工作区变化，不代表最近一轮修改。`,
       files: [{ path: "src/components/Composer.tsx", additions: 18, deletions: 6, status: "modified" }, { path: "src/app/navigation.ts", additions: 12, deletions: 0, status: "added" }],
       unifiedDiff: "--- before\n+++ after\n-old value\n+new value" };
-  }
-  override async readProjectFile(taskId: string, path: string) {
-    // Intentionally different response speeds to exercise stale-response protection.
-    await new Promise((resolve) => setTimeout(resolve, path.includes("Composer") ? 200 : 5));
-    return { path, content: `// ${taskId} / ${path}\nexport const draftKey = (projectId, taskId) =>\n  JSON.stringify([projectId, taskId]);`, sha256: "fixture", truncated: false };
   }
 }
 const bridge: DesktopBridge = new FixtureBridge({
@@ -50,7 +45,7 @@ const bridge: DesktopBridge = new FixtureBridge({
     { id: "ui-read", taskId: "ui-a", turnId: "ui-turn", kind: "file_read", title: "src/components/Composer.tsx", detail: "已读取输入组件与任务选择逻辑。", createdAt: updatedAt },
     { id: "ui-answer", taskId: "ui-a", turnId: "ui-turn", kind: "assistant", title: "Simple", detail: "发现一个会影响连续工作的细节：**切换任务后，输入框还保留着上一项任务的草稿。**\n\n建议按项目和任务分别保存草稿。这样你可以随时切换工作，不必反复复制未发送的内容。\n\n```typescript\nconst key = draftKey(projectId, taskId);\nconst draft = drafts[key] ?? '';\n```\n\n涉及 `Composer.tsx` 与 `navigation.ts`。权限边界与模型调用保持不变。" + (scenario === "long" ? "\n\n```text\n" + "long-content-".repeat(100) + "\n```" : ""), createdAt: updatedAt },
   ],
-  actions: scenario === "running" ? [{ id: "ui-running", taskId: "ui-a", turnId: "ui-turn", kind: "run_command", status: "running", title: "读取项目文件", detail: "Get-Content AGENTS.md", diff: null, result: "模拟命令输出", canUndo: false, createdAt: updatedAt }] : scenario === "approval" ? [{ id: "ui-action", taskId: "ui-a", turnId: "ui-turn", kind: "write_file", status: "pending", title: "更新输入草稿逻辑", detail: "src/components/Composer.tsx", diff: "-globalDraft\n+drafts[taskId]", result: null, canUndo: false, createdAt: updatedAt, risk: "修改项目文件" }] : [],
+  actions: scenario === "code" ? [{id:"code-action",taskId:"ui-a",turnId:"ui-turn",kind:"write_file",status:"applied",title:"src/main.ts",detail:"src/main.ts",diff:"--- src/main.ts\n+++ src/main.ts\n@@ -1 +1 @@\n-old code\n+new code",result:null,canUndo:false,createdAt:updatedAt}] : scenario === "running" ? [{ id: "ui-running", taskId: "ui-a", turnId: "ui-turn", kind: "run_command", status: "running", title: "读取项目文件", detail: "Get-Content AGENTS.md", diff: null, result: "模拟命令输出", canUndo: false, createdAt: updatedAt }] : scenario === "approval" ? [{ id: "ui-action", taskId: "ui-a", turnId: "ui-turn", kind: "write_file", status: "pending", title: "更新输入草稿逻辑", detail: "src/components/Composer.tsx", diff: "-globalDraft\n+drafts[taskId]", result: null, canUndo: false, createdAt: updatedAt, risk: "修改项目文件" }] : [],
   contextUsage: [{ taskId: "ui-a", estimatedTokens: 16000, contextWindowTokens: 131072, reservedOutputTokens: 8192, messageCount: 8, toolExchangeCount: 2 }],
 });
 bridge.pickAttachments = async () => {
@@ -85,6 +80,12 @@ if (scenario === "submission-unknown" || scenario === "submission-cold") {
   snapshot.activeTaskId = null;
   const unconfigured: DesktopBridge = new MemoryDesktopBridge(snapshot);
   unconfigured.pickAttachments = bridge.pickAttachments;
+  document.body.dataset.chatStarts = "0";
+  const startChat = unconfigured.startChat.bind(unconfigured);
+  unconfigured.startChat = async (...args) => {
+    document.body.dataset.chatStarts = String(Number(document.body.dataset.chatStarts) + 1);
+    return startChat(...args);
+  };
   createRoot(document.getElementById("root")!).render(<App bridge={unconfigured} />);
 } else {
   createRoot(document.getElementById("root")!).render(<App bridge={bridge} />);

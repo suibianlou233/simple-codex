@@ -2,7 +2,7 @@
 // reference or a display placeholder that could accidentally reach the model.
 export const LARGE_PASTE_CHAR_THRESHOLD = 1000;
 
-export type PastedTextBlock = { id: string; text: string };
+export type PastedTextBlock = { id: string; text: string; label?: string; source?: string };
 export type TextDraft = { content: string; pastes: PastedTextBlock[] };
 
 export function pasteIntoDraft(draft: TextDraft, text: string, start: number, end: number, id: string): TextDraft {

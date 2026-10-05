@@ -171,6 +171,7 @@ fn legacy_undo_is_project_scoped_not_just_action_turn_or_global_activity() {
             .to_string();
         runtime
             .prepare_codex_new_chat(&StartChatInput {
+                context_mode: Default::default(),
                 project_id,
                 profile_id: None,
                 content: "another task".into(),

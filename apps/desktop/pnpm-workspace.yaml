@@ -2,6 +2,7 @@ packages:
   - "."
 
 allowBuilds:
+  '@dtinsight/molecule': false
   esbuild: true
 
 onlyBuiltDependencies:

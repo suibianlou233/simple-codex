@@ -1,4 +1,7 @@
+import {TurnExecution, ExecutionSteps} from "../components/TurnExecution";
+import {ConversationBoundary, ConversationMessage} from "../components/assistant-ui/conversation";
 import { Fragment, useEffect, useState } from "react";
+import { ReasoningRoot, ReasoningTrigger, ReasoningContent, ReasoningText } from "../components/assistant-ui/reasoning";
 
 import type { TimelineEntry, ToolActionSummary, TurnSummary } from "../bridge/types";
 import { ItemRendererView } from "./ItemRendererRegistry";
@@ -8,7 +11,8 @@ import { toMessage } from "../app/feedback";
 import { SubagentReport } from "./SubagentReport";
 import { UserMessage, type TextDocument } from "./UserMessage";
 
-export function TaskTimeline({
+export function TaskTimeline(props: Parameters<typeof TimelineContent>[0]) {return <ConversationBoundary entries={props.entries} running={Boolean(props.activeTurnId)}><TimelineContent {...props}/></ConversationBoundary>;}
+function TimelineContent({
   entries,
   actions,
   activeTurnId,
@@ -42,8 +46,6 @@ export function TaskTimeline({
   const [editError, setEditError] = useState<string>();
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState(200);
-  const [expandedExecutions,setExpandedExecutions] = useState<Record<string,boolean>>({});
-  const setExecutionExpanded = (turnId:string,expanded:boolean) => setExpandedExecutions(previous=>({...previous,[turnId]:expanded}));
   useEffect(() => setVisibleLimit(200), [entries.at(-1)?.taskId]);
   const visibleEntries = entries.slice(Math.max(0, entries.length - visibleLimit));
   const lastAssistantId = [...entries]
@@ -74,13 +76,21 @@ export function TaskTimeline({
   for (const entry of entries) {
     if (entry.turnId && entry.kind === "assistant" && entry.phase !== "commentary") lastAssistantByTurn.set(entry.turnId, entry.id);
   }
-  const foldableCommentary = (entry: TimelineEntry) => Boolean(
+  const isProcessCommentary = (entry: TimelineEntry) => Boolean(
     entry.kind === "assistant"
     && entry.phase === "commentary"
-    && entry.turnId
-    && turnsById.has(entry.turnId)
-    && turnsById.get(entry.turnId)?.status !== "running",
+    && entry.turnId,
   );
+  const processStreaming = (group: TimelineEntry[]) => {
+    const turnId = group[0].turnId;
+    if (!turnId) return false;
+    const turn = turnsById.get(turnId);
+    if (turn && turn.status !== "running") return false;
+    if (!turn && turnId !== activeTurnId) return false;
+    const lastIndex = entries.findIndex(entry => entry.id === group.at(-1)?.id);
+    return !entries.slice(lastIndex + 1).some(entry => entry.turnId === turnId &&
+      entry.kind === "assistant" && entry.phase !== "commentary");
+  };
   // Chat-compatible providers may omit phase. Live deltas are still visible;
   // do not require a provider-specific final-answer label to stream them.
   const showAssistant = (entry: TimelineEntry) => {
@@ -97,14 +107,14 @@ export function TaskTimeline({
   };
   const canRenderEntry = (entry: TimelineEntry) => {
     if (["lifecycle", "file_read", "command", "file_change"].includes(entry.kind)) return false;
-    if (entry.kind === "assistant" && !showAssistant(entry) && !foldableCommentary(entry)) return false;
+    if (entry.kind === "assistant" && !showAssistant(entry) && !isProcessCommentary(entry)) return false;
     return !(entry.kind === "error" && entry.turnId &&
       (turnsById.has(entry.turnId) || entry.turnId === activeTurnId));
   };
   const groups: TimelineEntry[][] = [];
   for (const entry of visibleEntries.filter(canRenderEntry)) {
     const previous = groups.at(-1);
-    if (foldableCommentary(entry) && previous && foldableCommentary(previous[0])
+    if (isProcessCommentary(entry) && previous && isProcessCommentary(previous[0])
       && previous[0].turnId === entry.turnId) previous.push(entry);
     else groups.push([entry]);
   }
@@ -121,7 +131,7 @@ export function TaskTimeline({
     if (!turnId || lastVisibleEntryIdByTurn.get(turnId) !== entry.id || renderedProcessTurnIds.has(turnId)) return null;
     renderedProcessTurnIds.add(turnId);
     const turn = turnsById.get(turnId);
-    return <WorkProcess turnId={turnId} actions={actionsByTurn.get(turnId) ?? []} historyExpanded={Boolean(expandedExecutions[turnId])} onHistoryToggle={expanded=>setExecutionExpanded(turnId,expanded)}
+    return <WorkProcess turnId={turnId} actions={actionsByTurn.get(turnId) ?? []}
       evidence={readEvidenceByTurn.get(turnId) ?? []} phase={turn?.phase}
       startedAt={turn?.startedAt} outcome={turn?.status} childReport={turn?.childReport}
       failureMessage={entries.find((item) => item.turnId === turnId && item.kind === "error")?.detail}
@@ -134,11 +144,24 @@ export function TaskTimeline({
     const elapsed = elapsedBetween(turn.startedAt, turn.finishedAt);
     return elapsed === null ? null : <span className="turn-elapsed"> · 本轮用时 {formatElapsed(elapsed)}</span>;
   };
+  const summarizedTurns = new Set<string>();
+  const finalAnchor = (turnId: string) => visibleEntries.find(item => item.turnId===turnId && item.kind==="assistant" && !isProcessCommentary(item) && canRenderEntry(item));
+  const renderTurnExecution = (entry: TimelineEntry) => {
+    const turn=entry.turnId ? turnsById.get(entry.turnId) : undefined;
+    if(!turn || turn.status==="running" || summarizedTurns.has(turn.id))return null;
+    const anchor=finalAnchor(turn.id);
+    if(anchor ? anchor.id!==entry.id : lastVisibleEntryIdByTurn.get(turn.id)!==entry.id)return null;
+    summarizedTurns.add(turn.id);
+    return <TurnExecution turn={turn} actions={actionsByTurn.get(turn.id)??[]} evidence={readEvidenceByTurn.get(turn.id)??[]}>
+      {entries.filter(item=>item.turnId===turn.id && isProcessCommentary(item)).map(item=><ConversationMessage key={item.id} entry={item}><div className="message-column"><ItemRendererView item={item}/></div></ConversationMessage>)}
+    </TurnExecution>;
+  };
   const renderEntry = (entry: TimelineEntry) => {
         if (!canRenderEntry(entry)) return null;
         return (
           <Fragment key={entry.id}>
-            <article className={`chat-message chat-${entry.kind}${entry.phase === "commentary" ? " chat-commentary" : ""}`}>
+            {entry.kind !== "user" ? renderTurnExecution(entry) : null}
+            <ConversationMessage entry={entry}>
               <div className="message-column">
                 {editingMessageId === entry.id ? (
                   <form
@@ -167,7 +190,8 @@ export function TaskTimeline({
                 ) : (
                   entry.kind === "user" && onOpenText ? <UserMessage text={entry.detail ?? entry.title} onOpen={onOpenText}/> : <ItemRendererView item={entry} />
                 )}
-                {editingMessageId !== entry.id ? (
+                {editingMessageId !== entry.id && (entry.kind === "user" ||
+                  (entry.kind === "assistant" && entry.phase !== "commentary" && entry.status !== "streaming")) ? (
                   <div className="message-actions">
                     {entry.kind === "user" || entry.kind === "assistant" ? <CopyButton text={entry.detail ?? entry.title} /> : null}
                     {entry.kind === "user" ? (
@@ -205,8 +229,9 @@ export function TaskTimeline({
                   </div>
                 ) : null}
               </div>
-            </article>
-            {!foldableCommentary(entry) ? renderProcess(entry) : null}
+            </ConversationMessage>
+            {entry.kind === "user" ? renderTurnExecution(entry) : null}
+            {!isProcessCommentary(entry) ? renderProcess(entry) : null}
           </Fragment>
         );
   };
@@ -217,12 +242,14 @@ export function TaskTimeline({
           显示更早的 {Math.min(200, entries.length - visibleEntries.length)} 条记录
         </button>
       ) : null}
-      {groups.map((group) => foldableCommentary(group[0]) ? (
+      {groups.map((group) => isProcessCommentary(group[0]) && turnsById.get(group[0].turnId!) && turnsById.get(group[0].turnId!)?.status!=="running" ? <Fragment key={group[0].id}>{renderTurnExecution(group[group.length-1])}{!finalAnchor(group[0].turnId!) ? renderProcess(group[group.length-1]) : null}</Fragment> : isProcessCommentary(group[0]) ? (
         <Fragment key={`${group[0].id}-process`}>
-        <details className="completed-commentary">
-          <summary>执行过程 · {group.length} 条说明{renderCompletedElapsed(group[0])}</summary>
-          <div className="completed-commentary-content">{group.map(renderEntry)}</div>
-        </details>
+        <ReasoningRoot className="process-reasoning" variant="muted" streaming={processStreaming(group)}>
+          <ReasoningTrigger active={processStreaming(group)} label={<>执行过程 · {group.length} 条说明{renderCompletedElapsed(group[0])}</>} />
+          <ReasoningContent>
+            <ReasoningText>{group.map(renderEntry)}</ReasoningText>
+          </ReasoningContent>
+        </ReasoningRoot>
         {renderProcess(group[group.length - 1])}
         </Fragment>
       ) : renderEntry(group[0]))}
@@ -243,8 +270,6 @@ export function TaskTimeline({
           <WorkProcess
             key={turnId}
             turnId={turnId}
-            historyExpanded={Boolean(expandedExecutions[turnId])}
-            onHistoryToggle={expanded=>setExecutionExpanded(turnId,expanded)}
             actions={actionsByTurn.get(turnId) ?? []}
             evidence={readEvidenceByTurn.get(turnId) ?? []}
             phase={turnsById.get(turnId)?.phase}
@@ -308,11 +333,9 @@ function workProcessState(
 
 function WorkProcess({
   turnId, actions, evidence, active, outcome, childReport, phase, startedAt, failureMessage, disabled, undoBlocked,
-  onApprove, onReject, onUndo, onCancel, historyExpanded, onHistoryToggle,
+  onApprove, onReject, onUndo, onCancel,
 }: {
   turnId: string;
-  historyExpanded: boolean;
-  onHistoryToggle: (expanded:boolean)=>void;
   actions: ToolActionSummary[];
   evidence: TimelineEntry[];
   active: boolean;
@@ -347,10 +370,10 @@ function WorkProcess({
         <div className="work-process work-process-live" data-running={running} data-attention={failure || needsReview} role={failure || needsReview ? "alert" : "status"}>
           <span className="work-process-dot" aria-hidden="true" />
           <strong>{summary}</strong>
-          {running && pending.length === 0 ? <ElapsedTime startedAt={startedAt} /> : null}
+          {running ? <span className="execution-live-duration">已用时 <ElapsedTime startedAt={startedAt} /></span> : null}
         </div>
       ) : null}
-      {steps.length > 0 ? <ExecutionHistory actions={steps} running={running} uncertain={uncertain} expanded={historyExpanded} onToggle={onHistoryToggle} /> : null}
+      {running && !uncertain ? <ExecutionSteps actions={steps} evidence={evidence} live /> : null}
       {failure ? <p className="user-task-notice">{toMessage(failureMessage)} 已完成的修改可能仍保留，请先检查当前项目。</p> : null}
       {outcome === "cancelled" ? <p className="user-task-notice">停止不会自动撤销已经完成的修改。</p> : null}
       {needsReview && failedOperations ? <p className="user-task-notice">执行过程中有操作未成功。后续尝试可能已解决问题，请结合最终回复检查修改并验证结果。</p> : null}
@@ -372,40 +395,6 @@ function WorkProcess({
   );
 }
 
-export function executionGroups(actions: ToolActionSummary[], running: boolean, uncertain: boolean) {
-  const groups: {id:string;kind:ToolActionSummary["kind"];status:string;count:number}[] = [];
-  for (const action of actions) {
-    const status = (!running || uncertain) && action.status === "running" ? "unknown" : action.status;
-    const previous = groups.at(-1);
-    if (previous?.kind === action.kind && previous.status === status) previous.count++;
-    else groups.push({id:action.id,kind:action.kind,status,count:1});
-  }
-  return groups;
-}
-
-function ExecutionHistory({actions,running,uncertain,expanded,onToggle}:{actions:ToolActionSummary[];running:boolean;uncertain:boolean;expanded:boolean;onToggle:(expanded:boolean)=>void}) {
-  // User-owned expansion: new deltas must not force the history open again.
-  const failed = actions.filter(action=>action.status==="failed").length;
-  const live = running && !uncertain ? actions.filter(action=>action.status==="running") : [];
-  const groups = executionGroups(actions,running,uncertain);
-  const commands = actions.filter(action=>action.kind==="run_command").length;
-  const changes = actions.length-commands;
-  return <details className="execution-steps" open={expanded} onToggle={event=>{if(event.currentTarget.open!==expanded)onToggle(event.currentTarget.open);}}>
-    <summary><span className="execution-chevron" aria-hidden="true">›</span><span className="execution-label">执行记录</span>
-      <span className="execution-count">{actions.length} 项操作</span>
-      {live.length ? <span className="execution-live"><span aria-hidden="true"/> {live.length} 项进行中</span> : null}
-      {failed ? <span className="execution-warning">{failed} 次未成功</span> : null}
-    </summary>
-    <div className="execution-history">
-      <div className="execution-overview">{[commands ? `${commands} 次命令调用` : "",changes ? `${changes} 次文件修改` : ""].filter(Boolean).join(" · ")}</div>
-      <div className="execution-groups">{groups.map(group=><div key={group.id} className="execution-group" data-status={group.status}>
-        <span className="execution-kind-icon" aria-hidden="true">{group.kind==="write_file"?"▧":">_"}</span>
-        <span>{group.kind==="write_file"?"修改文件":"执行命令"}{group.count>1?<small> × {group.count}</small>:null}</span>
-        <span className="execution-group-status">{group.status==="unknown"?"结果待确认":actionStatusLabels[group.status as ToolActionSummary["status"]]}</span>
-      </div>)}</div>
-    </div>
-  </details>;
-}
 
 export { MarkdownMessage } from "./MarkdownMessage";
 

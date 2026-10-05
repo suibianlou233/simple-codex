@@ -1,5 +1,6 @@
 // Generate accompanying notices from installed, locked dependencies; no network.
 import fs from 'node:fs';
+import {frontendLicenseSupplement} from './frontend-license-supplements.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -31,11 +32,13 @@ function add(ecosystem, name, version, expression, directory) {
       }
     }
   }
-  inventory.push({ ecosystem, name, version, license: expression ?? null, noticeFiles: files });
+  const supplement = ecosystem === 'npm' ? frontendLicenseSupplement(root, name, version) : null;
+  inventory.push({ ecosystem, name, version, license: expression ?? null, noticeFiles: files, ...(supplement ? {supplementFiles: [supplement.file]} : {}) });
   notices.push(`## ${ecosystem}: ${name} ${version}`, '', `License expression: ${expression ?? 'see package source'}`, '');
   for (const file of files.sort()) {
     notices.push(`### ${file.replaceAll('\\', '/')}`, '', fs.readFileSync(path.join(directory, file), 'utf8'), '');
   }
+  if (supplement) notices.push('### Simple-supplied license supplement', '', supplement.text, '');
   if (!files.length) notices.push('No root license text in this cached package; refer to its declared license and upstream source.', '');
 }
 

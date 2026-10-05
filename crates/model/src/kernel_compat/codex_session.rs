@@ -57,11 +57,23 @@ mod deletion_tests {
     #[tokio::test]
     async fn deletion_retry_accepts_only_exact_missing_history_error() {
         let missing = json!({"code":-32600,"message":"no rollout found for thread id fixture"});
-        assert!(CodexSessionBridge::new(FailingRpc(missing)).delete_thread("fixture").await.is_ok());
-        for error in [json!({"code":-32600,"message":"permission denied"}),
+        assert!(
+            CodexSessionBridge::new(FailingRpc(missing))
+                .delete_thread("fixture")
+                .await
+                .is_ok()
+        );
+        for error in [
+            json!({"code":-32600,"message":"permission denied"}),
             json!({"code":-32600,"message":"no rollout found for thread id other"}),
-            json!({"code":-32601,"message":"method not found"})] {
-            assert!(CodexSessionBridge::new(FailingRpc(error)).delete_thread("fixture").await.is_err());
+            json!({"code":-32601,"message":"method not found"}),
+        ] {
+            assert!(
+                CodexSessionBridge::new(FailingRpc(error))
+                    .delete_thread("fixture")
+                    .await
+                    .is_err()
+            );
         }
     }
 }
@@ -126,13 +138,32 @@ where
         Self { rpc }
     }
 
+    pub async fn steer_turn(
+        &self,
+        thread_id: &str,
+        expected_turn_id: &str,
+        text: &str,
+    ) -> Result<(), CodexSessionError> {
+        self.rpc.request("turn/steer",json!({"threadId":thread_id,"expectedTurnId":expected_turn_id,"input":[{"type":"text","text":text,"text_elements":[]}]})).await?;
+        Ok(())
+    }
+
     pub async fn delete_thread(&self, thread_id: &str) -> Result<(), CodexSessionError> {
-        match self.rpc.request("thread/delete", json!({ "threadId": thread_id })).await {
+        match self
+            .rpc
+            .request("thread/delete", json!({ "threadId": thread_id }))
+            .await
+        {
             Ok(_) => Ok(()),
             // The pinned kernel returns this exact error on a repeated deletion.
             // Allow recovery if native deletion committed before the local DB did.
-            Err(CodexKernelError::Rpc(error)) if error["code"] == -32600
-                && error["message"] == format!("no rollout found for thread id {thread_id}") => Ok(()),
+            Err(CodexKernelError::Rpc(error))
+                if error["code"] == -32600
+                    && error["message"]
+                        == format!("no rollout found for thread id {thread_id}") =>
+            {
+                Ok(())
+            }
             Err(error) => Err(error.into()),
         }
     }
@@ -683,5 +714,32 @@ mod tests {
             CodexSessionError::DuplicateId { kind: "item", .. }
         ));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod steering_tests {
+    use super::*;
+    struct MockRpc;
+    #[async_trait]
+    impl CodexRpc for MockRpc {
+        async fn request(&self, method: &str, params: Value) -> Result<Value, CodexKernelError> {
+            assert_eq!(method, "turn/steer");
+            assert_eq!(params["expectedTurnId"], "active");
+            assert_eq!(params["threadId"], "thread");
+            assert_eq!(params["input"][0]["text"], "keep changes");
+            Err(CodexKernelError::Rpc(
+                json!({"code":-32600,"message":"stale turn"}),
+            ))
+        }
+    }
+    #[tokio::test]
+    async fn steering_binds_expected_turn_and_propagates_rejection() {
+        assert!(
+            CodexSessionBridge::new(MockRpc)
+                .steer_turn("thread", "active", "keep changes")
+                .await
+                .is_err()
+        );
     }
 }

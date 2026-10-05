@@ -1,5 +1,7 @@
 #[path = "editor.rs"]
 pub(crate) mod editor;
+#[path = "editor_ai.rs"]
+pub(crate) mod editor_ai;
 use std::collections::{HashMap, HashSet, VecDeque};
 #[path = "task_lifecycle.rs"]
 pub(crate) mod task_lifecycle;
@@ -38,8 +40,7 @@ use local_agent_tools::{
     CommandOutput, CommandRequest, SandboxHealth, ToolCall as KernelToolCall, ToolDispatchContext,
     ToolOutcome as KernelToolOutcome, ToolRouter, Workspace, WorkspaceError, WritePreview,
     coding_tool_registry, command_execution_metadata, hash_bytes, run_command,
-    run_command_with_policy, validate_command_request, workspace_sandbox_available,
-    workspace_sandbox_health,
+    run_command_with_policy, workspace_sandbox_available, workspace_sandbox_health,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -59,26 +60,24 @@ use crate::secrets::{SecretStore, SecretStoreError, SystemSecretStore};
 mod legacy_execution;
 use legacy_execution::{LegacyExecutionState, execute_turn};
 
+#[path = "browser.rs"]
+pub(crate) mod browser;
 #[path = "codex_completion.rs"]
 mod codex_completion;
 #[path = "codex_descendants.rs"]
 mod codex_descendants;
 #[path = "codex_submission.rs"]
 mod codex_submission;
+#[path = "image_attachments.rs"]
+pub(crate) mod image_attachments;
+#[path = "interactive_terminal.rs"]
+pub(crate) mod interactive_terminal;
 #[path = "kernel_desktop.rs"]
 pub(crate) mod kernel_desktop;
 #[path = "memory_control.rs"]
 mod memory_control;
 #[path = "memory_notes.rs"]
 pub(crate) mod memory_notes;
-#[path = "image_attachments.rs"]
-pub(crate) mod image_attachments;
-#[path = "skill_library.rs"]
-pub(crate) mod skill_library;
-#[path = "interactive_terminal.rs"]
-pub(crate) mod interactive_terminal;
-#[path = "browser.rs"]
-pub(crate) mod browser;
 #[path = "memory_view.rs"]
 mod memory_view;
 #[path = "project_execution.rs"]
@@ -87,6 +86,8 @@ mod project_execution;
 mod project_lease;
 #[path = "project_memory.rs"]
 mod project_memory;
+#[path = "skill_library.rs"]
+pub(crate) mod skill_library;
 #[path = "subagent_report.rs"]
 mod subagent_report;
 #[path = "turn_preparation.rs"]
@@ -197,7 +198,6 @@ pub(crate) enum DesktopError {
     #[error("Codex 新任务暂不支持{0}；完成对应的原生 Thread API 接入前不会回退旧引擎")]
     UnsupportedCodexOperation(&'static str),
 }
-
 
 // Message size is governed by the configured model and transport, not a 16k UI limit.
 const MIN_CONTEXT_WINDOW_TOKENS: u32 = 16_384;
@@ -383,7 +383,6 @@ pub struct DesktopState {
     runtime: Arc<Mutex<DesktopRuntime>>,
     active_turns: Arc<Mutex<HashMap<String, CancellationToken>>>,
     active_actions: Arc<Mutex<HashMap<String, CancellationToken>>>,
-    terminal_sessions: Arc<Mutex<HashMap<String, TerminalSessionState>>>,
     codex_kernels: Arc<AsyncMutex<HashMap<String, CodexKernelClient>>>,
     codex_loaded_threads: Arc<AsyncMutex<HashSet<String>>>,
     codex_pending_approvals: Arc<Mutex<HashMap<String, PendingCodexApproval>>>,
@@ -431,7 +430,6 @@ impl DesktopState {
             runtime: Arc::new(Mutex::new(runtime)),
             active_turns: Arc::new(Mutex::new(HashMap::new())),
             active_actions: Arc::new(Mutex::new(HashMap::new())),
-            terminal_sessions: Arc::new(Mutex::new(HashMap::new())),
             codex_kernels: Arc::new(AsyncMutex::new(HashMap::new())),
             codex_loaded_threads: Arc::new(AsyncMutex::new(HashSet::new())),
             codex_pending_approvals: Arc::new(Mutex::new(HashMap::new())),
@@ -450,14 +448,6 @@ impl DesktopState {
             .clone()
             .map_err(DesktopError::KernelSelection)
     }
-}
-
-#[derive(Debug, Clone)]
-struct TerminalSessionState {
-    id: String,
-    task_id: String,
-    project_id: String,
-    root: PathBuf,
 }
 
 #[derive(Clone)]
@@ -548,6 +538,7 @@ struct DesktopRuntime {
     turn_profiles: HashMap<String, String>,
     legacy: LegacyExecutionState,
     task_backends: HashMap<TaskId, TaskBackend>,
+    task_context_modes: HashMap<TaskId, ContextMode>,
     task_memory_enabled: HashMap<TaskId, bool>,
     codex_turn_links: HashMap<String, CodexTurnBinding>,
     codex_turn_projectors: HashMap<String, CodexTurnProjector>,
@@ -763,6 +754,7 @@ impl DesktopRuntime {
         let mut continuation_sources = HashMap::new();
         let mut turn_engines = HashMap::new();
         let mut task_backends = HashMap::new();
+        let mut task_context_modes = HashMap::new();
         let mut task_memory_enabled = HashMap::new();
         let mut codex_turn_links = HashMap::new();
         for stored in storage.list_tasks()? {
@@ -940,6 +932,14 @@ impl DesktopRuntime {
                         task_permissions.insert(task.id, permission_level);
                     }
                     "task_backend_selected" => {
+                        let mode = event
+                            .payload
+                            .get("context_mode")
+                            .cloned()
+                            .map(serde_json::from_value::<ContextMode>)
+                            .transpose()?
+                            .unwrap_or_default();
+                        task_context_modes.insert(task.id, mode);
                         let backend = event
                             .payload
                             .get("backend")
@@ -1068,6 +1068,7 @@ impl DesktopRuntime {
                 pending_continuations: Vec::new(),
             },
             task_backends,
+            task_context_modes,
             task_memory_enabled,
             codex_turn_links,
             codex_turn_projectors: HashMap::new(),
@@ -1324,6 +1325,11 @@ impl DesktopRuntime {
             .tasks
             .iter()
             .map(|task| BackendTask {
+                context_mode: self
+                    .task_context_modes
+                    .get(&task.id)
+                    .copied()
+                    .unwrap_or_default(),
                 archived: archived.contains(&task.id.to_string()),
                 id: task.id.to_string(),
                 project_id: task.project_id.to_string(),
@@ -2043,7 +2049,9 @@ impl DesktopRuntime {
         &mut self,
         input: &StartChatInput,
     ) -> Result<PreparedCodexTurn, DesktopError> {
-        if !self.lifecycle_pending.is_empty() { return Err(DesktopError::StateUnavailable); }
+        if !self.lifecycle_pending.is_empty() {
+            return Err(DesktopError::StateUnavailable);
+        }
         let content = validate_chat_content(&input.content)?;
         let project_id = parse_project_id(&input.project_id)?;
         let permission_level = input.permission_level;
@@ -2056,7 +2064,12 @@ impl DesktopRuntime {
         let project_root = project.root.clone();
         let profile = selected_model_profile(&self.storage, input.profile_id.as_deref())?;
         let gateway = gateway_for_profile(&profile, &*self.secret_store)?;
-        image_attachments::input(&self.database_path, &project_root, content, gateway.supports_images())?;
+        image_attachments::input(
+            &self.database_path,
+            &project_root,
+            content,
+            gateway.supports_images(),
+        )?;
 
         let mut staged_core = self.core.clone();
         let created_event = staged_core.decide(AppCommand::CreateTask {
@@ -2110,6 +2123,7 @@ impl DesktopRuntime {
                     event_type: "task_backend_selected".to_owned(),
                     payload: json!({
                         "backend": "codex",
+                        "context_mode": input.context_mode,
                         "model_profile_id": profile.profile_id.clone()
                     }),
                     created_at_ms: task.created_at_ms,
@@ -2150,6 +2164,7 @@ impl DesktopRuntime {
         )?;
 
         self.core = staged_core;
+        self.task_context_modes.insert(task.id, input.context_mode);
         self.task_goals.insert(task.id, content.to_owned());
         self.task_permissions.insert(task.id, permission_level);
         self.task_backends.insert(
@@ -2180,8 +2195,12 @@ impl DesktopRuntime {
         &mut self,
         input: &StartTurnInput,
     ) -> Result<PreparedCodexTurn, DesktopError> {
-        if !self.lifecycle_pending.is_empty() || self.storage.archived_task_ids()?.contains(&input.task_id) {
-            return Err(DesktopError::UnsupportedCodexOperation("发送：请先恢复归档对话并等待管理操作完成"));
+        if !self.lifecycle_pending.is_empty()
+            || self.storage.archived_task_ids()?.contains(&input.task_id)
+        {
+            return Err(DesktopError::UnsupportedCodexOperation(
+                "发送：请先恢复归档对话并等待管理操作完成",
+            ));
         }
         let content = validate_chat_content(&input.content)?;
         let task_id = parse_task_id(&input.task_id)?;
@@ -2222,7 +2241,12 @@ impl DesktopRuntime {
             .ok_or_else(|| DesktopError::ModelProfileNotFound(model_profile_id.clone()))?;
         let gateway = gateway_for_profile(&profile, &*self.secret_store)?;
         let binding = self.storage.codex_thread_binding_for_task(&input.task_id)?;
-        image_attachments::input(&self.database_path, &project_root, content, gateway.supports_images())?;
+        image_attachments::input(
+            &self.database_path,
+            &project_root,
+            content,
+            gateway.supports_images(),
+        )?;
 
         let start_event = self.core.decide(AppCommand::StartTurn { task_id })?;
         let AppEvent::TurnStarted { turn } = &start_event else {
@@ -2335,7 +2359,9 @@ impl DesktopRuntime {
     }
 
     fn prepare_codex_control(&self, task_id: &str) -> Result<PreparedCodexControl, DesktopError> {
-        if !self.lifecycle_pending.is_empty() { return Err(DesktopError::StateUnavailable); }
+        if !self.lifecycle_pending.is_empty() {
+            return Err(DesktopError::StateUnavailable);
+        }
         let parsed_task_id = parse_task_id(task_id)?;
         let model_profile_id = match self.task_backends.get(&parsed_task_id) {
             Some(TaskBackend::Codex { model_profile_id }) => model_profile_id,
@@ -2906,7 +2932,8 @@ impl DesktopRuntime {
                 event_type: "task_backend_selected".to_owned(),
                 payload: json!({
                     "backend": "codex",
-                    "model_profile_id": plan.control.profile.profile_id
+                    "model_profile_id": plan.control.profile.profile_id,
+                    "context_mode": self.task_context_modes.get(&plan.source_task_id).copied().unwrap_or_default()
                 }),
                 created_at_ms: task.created_at_ms,
             },
@@ -2981,6 +3008,13 @@ impl DesktopRuntime {
             },
         )?;
         self.core.apply(&created_event)?;
+        self.task_context_modes.insert(
+            task.id,
+            self.task_context_modes
+                .get(&plan.source_task_id)
+                .copied()
+                .unwrap_or_default(),
+        );
         self.task_permissions.insert(task.id, plan.permission_level);
         self.task_memory_enabled
             .insert(task.id, plan.memory_enabled);
@@ -4244,6 +4278,7 @@ pub struct BackendProject {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackendTask {
+    context_mode: ContextMode,
     archived: bool,
     id: String,
     project_id: String,
@@ -4480,37 +4515,6 @@ pub struct BackendWorkspaceDiff {
     unified_diff: String,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BackendTerminalSession {
-    id: String,
-    task_id: String,
-    project_id: String,
-    cwd: String,
-    process_boundary: &'static str,
-    created_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RunTerminalCommandInput {
-    session_id: String,
-    program: String,
-    #[serde(default)]
-    args: Vec<String>,
-    cwd: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BackendTerminalCommandResult {
-    command_id: String,
-    exit_code: Option<i32>,
-    stdout: String,
-    stderr: String,
-    truncated: bool,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTaskInput {
@@ -4551,9 +4555,27 @@ pub struct StartTurnInput {
     content: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextMode {
+    #[default]
+    Simple,
+    Code,
+}
+impl ContextMode {
+    fn history_home(self, default: &str) -> String {
+        match self {
+            Self::Simple => default.to_owned(),
+            Self::Code => hash_bytes(format!("simple-code-context-v1:{default}").as_bytes()),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartChatInput {
+    #[serde(default)]
+    context_mode: ContextMode,
     project_id: String,
     profile_id: Option<String>,
     content: String,
@@ -4757,35 +4779,6 @@ pub fn pick_attachments(
 }
 
 #[tauri::command]
-pub fn read_project_file(
-    task_id: String,
-    path: String,
-    state: State<'_, DesktopState>,
-) -> Result<BackendInspectorFile, String> {
-    let runtime = state.lock().map_err(command_error)?;
-    let parsed = parse_task_id(&task_id).map_err(command_error)?;
-    let snapshot = runtime.core.snapshot();
-    let task = snapshot
-        .tasks
-        .iter()
-        .find(|task| task.id == parsed)
-        .ok_or_else(|| command_error(local_agent_core::CoreError::TaskNotFound(parsed)))?;
-    let project = snapshot
-        .projects
-        .iter()
-        .find(|project| project.id == task.project_id)
-        .ok_or_else(|| command_error(DesktopError::StateUnavailable))?;
-    let workspace = Workspace::open(&project.root).map_err(command_error)?;
-    let file = workspace.read_file(&path).map_err(command_error)?;
-    Ok(BackendInspectorFile {
-        path: file.path,
-        content: file.content,
-        sha256: file.sha256,
-        truncated: false,
-    })
-}
-
-#[tauri::command]
 pub async fn load_workspace_diff(
     task_id: String,
     state: State<'_, DesktopState>,
@@ -4877,180 +4870,6 @@ pub async fn load_workspace_diff(
         files,
         unified_diff: diff.stdout,
     })
-}
-
-#[tauri::command]
-pub fn open_terminal(
-    task_id: String,
-    state: State<'_, DesktopState>,
-) -> Result<BackendTerminalSession, String> {
-    let (project_id, root) = {
-        let runtime = state.lock().map_err(command_error)?;
-        let parsed = parse_task_id(&task_id).map_err(command_error)?;
-        let snapshot = runtime.core.snapshot();
-        let task = snapshot
-            .tasks
-            .iter()
-            .find(|task| task.id == parsed)
-            .ok_or_else(|| command_error(local_agent_core::CoreError::TaskNotFound(parsed)))?;
-        let project = snapshot
-            .projects
-            .iter()
-            .find(|project| project.id == task.project_id)
-            .ok_or_else(|| command_error(DesktopError::StateUnavailable))?;
-        (project.id.to_string(), project.root.clone())
-    };
-    let id = Uuid::new_v4().to_string();
-    let created_at_ms = unix_time_ms().map_err(command_error)?;
-    let session = TerminalSessionState {
-        id: id.clone(),
-        task_id: task_id.clone(),
-        project_id: project_id.clone(),
-        root: root.clone(),
-    };
-    state
-        .terminal_sessions
-        .lock()
-        .map_err(|_| command_error(DesktopError::StateUnavailable))?
-        .insert(id.clone(), session);
-    Ok(BackendTerminalSession {
-        id,
-        task_id,
-        project_id,
-        cwd: user_visible_path(&root),
-        process_boundary: if cfg!(windows) {
-            "windows_job_object"
-        } else {
-            "process_only"
-        },
-        created_at: created_at_ms.to_string(),
-    })
-}
-
-#[tauri::command]
-pub async fn run_terminal_command(
-    input: RunTerminalCommandInput,
-    state: State<'_, DesktopState>,
-) -> Result<BackendTerminalCommandResult, String> {
-    let session = state
-        .terminal_sessions
-        .lock()
-        .map_err(|_| command_error(DesktopError::StateUnavailable))?
-        .get(&input.session_id)
-        .cloned()
-        .ok_or_else(|| "终端会话不存在或应用已经重启".to_owned())?;
-    let request = CommandRequest {
-        program: input.program,
-        args: input.args,
-        cwd: input.cwd.unwrap_or_else(|| ".".to_owned()),
-        timeout_ms: 120_000,
-    };
-    validate_command_request(&request).map_err(command_error)?;
-    // User terminal commands share the same project write coordination as
-    // native turns and review decisions. Acquire before recording execution.
-    let _project_lease = {
-        let runtime = state.lock().map_err(command_error)?;
-        project_lease::ProjectLease::acquire(
-            &session.root,
-            runtime
-                .database_path
-                .parent()
-                .ok_or_else(|| command_error(DesktopError::InvalidStoredPath))?,
-        )
-        .map_err(command_error)?
-    };
-    let command_id = Uuid::new_v4().to_string();
-    let idempotency_key = format!("terminal:{command_id}");
-    {
-        let mut runtime = state.lock().map_err(command_error)?;
-        let now = unix_time_ms().map_err(command_error)?;
-        runtime
-            .storage
-            .prepare_action_intent(NewActionIntent {
-                event_id: Uuid::new_v4().to_string(),
-                action_id: command_id.clone(),
-                idempotency_key: idempotency_key.clone(),
-                thread_id: session.task_id.clone(),
-                turn_id: None,
-                step_id: None,
-                schema_version: 1,
-                action_kind: "terminal_command".to_owned(),
-                payload: json!({
-                    "session_id": session.id,
-                    "project_id": session.project_id,
-                    "program": request.program,
-                    "args": request.args,
-                    "cwd": request.cwd
-                }),
-                approval: None,
-                created_at_ms: now,
-            })
-            .map_err(command_error)?;
-        let began = runtime
-            .storage
-            .begin_action_execution(
-                &idempotency_key,
-                &Uuid::new_v4().to_string(),
-                json!({ "command_id": command_id, "source": "user_terminal" }),
-                now,
-            )
-            .map_err(command_error)?;
-        if !matches!(began, BeginActionOutcome::Execute(_)) {
-            return Err("终端命令未获得唯一执行权".to_owned());
-        }
-    }
-    let workspace = Workspace::open(&session.root).map_err(command_error)?;
-    let outcome = run_logged_command(
-        &command_id,
-        &workspace,
-        &request,
-        CancellationToken::new(),
-        CommandExecutionPolicy::ApprovedHost,
-    )
-    .await;
-    let mut runtime = state.lock().map_err(command_error)?;
-    let (result, succeeded) = match outcome {
-        Ok(output) => {
-            let secrets = runtime.known_secret_values();
-            let stdout = redact_sensitive_output_with_secrets(&output.stdout, &secrets);
-            let stderr = redact_sensitive_output_with_secrets(&output.stderr, &secrets);
-            (
-                BackendTerminalCommandResult {
-                    command_id: command_id.clone(),
-                    exit_code: output.exit_code,
-                    stdout,
-                    stderr,
-                    truncated: output.truncated,
-                },
-                output.exit_code == Some(0),
-            )
-        }
-        Err(error) => (
-            BackendTerminalCommandResult {
-                command_id: command_id.clone(),
-                exit_code: None,
-                stdout: String::new(),
-                stderr: error.to_string(),
-                truncated: false,
-            },
-            false,
-        ),
-    };
-    runtime
-        .storage
-        .finish_action_execution(
-            &idempotency_key,
-            &Uuid::new_v4().to_string(),
-            if succeeded {
-                ActionExecutionResult::Completed
-            } else {
-                ActionExecutionResult::Failed
-            },
-            json!({ "command_id": command_id, "exit_code": result.exit_code }),
-            unix_time_ms().map_err(command_error)?,
-        )
-        .map_err(command_error)?;
-    Ok(result)
 }
 
 #[tauri::command]
@@ -5616,7 +5435,12 @@ async fn ensure_codex_kernel(
     let (home_name, project_root) = {
         let mut runtime = runtime.lock().map_err(|_| DesktopError::StateUnavailable)?;
         let project_root = runtime.task_project_root(task_id)?;
-        let default_home = executable.default_history_home(&task_id.to_string());
+        let default_home = runtime
+            .task_context_modes
+            .get(&task_id)
+            .copied()
+            .unwrap_or_default()
+            .history_home(&executable.default_history_home(&task_id.to_string()));
         let home_name = runtime.storage.resolve_codex_history_home(
             &task_id.to_string(),
             &codex_home,
@@ -5632,7 +5456,9 @@ async fn ensure_codex_kernel(
     let kernel_key = location.cache_key;
     if let Some(client) = kernels_guard.get(&kernel_key) {
         client.register_model(gateway).await?;
-        if executable.is_upstream_preview() { skill_library::apply_to_kernel(&app, client).await?; }
+        if executable.is_upstream_preview() {
+            skill_library::apply_to_kernel(&app, client).await?;
+        }
         return Ok((client.clone(), kernel_key));
     }
     let profile_home = codex_home.join(home_name);
@@ -5752,7 +5578,11 @@ async fn consume_codex_events(
                 // Never hold the event gate while a browser approval is pending:
                 // native completion and stop must keep flowing independently.
                 tauri::async_runtime::spawn(browser::handle_tool(
-                    app.clone(), Arc::clone(&runtime), client.clone(), id, params,
+                    app.clone(),
+                    Arc::clone(&runtime),
+                    client.clone(),
+                    id,
+                    params,
                 ));
             }
             CodexKernelEvent::OtherRequest { id, method, .. } => {
@@ -5804,11 +5634,17 @@ async fn consume_codex_events(
                 }
             }
             event => {
-                if let CodexKernelEvent::TurnCompleted { thread_id, turn_id, .. } = &event {
+                if let CodexKernelEvent::TurnCompleted {
+                    thread_id, turn_id, ..
+                } = &event
+                {
                     if let Ok(state) = runtime.lock() {
                         if let Some(binding) = state.codex_action_binding(thread_id, turn_id) {
-                            if binding.codex_turn_id == *turn_id && state.codex_turn_links.get(turn_id) == Some(&binding) {
-                                app.state::<browser::BrowserState>().finish(&binding.turn_id);
+                            if binding.codex_turn_id == *turn_id
+                                && state.codex_turn_links.get(turn_id) == Some(&binding)
+                            {
+                                app.state::<browser::BrowserState>()
+                                    .finish(&binding.turn_id);
                             }
                         }
                     }
@@ -6333,9 +6169,23 @@ pub async fn start_chat(
 #[tauri::command]
 pub async fn start_turn(
     input: StartTurnInput,
+    context_mode: Option<ContextMode>,
     app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<String, String> {
+    if let Some(mode) = context_mode {
+        let runtime = state.lock().map_err(command_error)?;
+        let task = parse_task_id(&input.task_id).map_err(command_error)?;
+        if runtime
+            .task_context_modes
+            .get(&task)
+            .copied()
+            .unwrap_or_default()
+            != mode
+        {
+            return Err("会话不属于当前工作模式，未发送任何内容".into());
+        }
+    }
     let prepared = state
         .lock()
         .map_err(command_error)?
@@ -6491,7 +6341,11 @@ async fn interrupt_codex_turn(
 }
 
 #[tauri::command]
-pub async fn cancel_turn(turn_id: String, browser: State<'_, browser::BrowserState>, state: State<'_, DesktopState>) -> Result<(), String> {
+pub async fn cancel_turn(
+    turn_id: String,
+    browser: State<'_, browser::BrowserState>,
+    state: State<'_, DesktopState>,
+) -> Result<(), String> {
     browser.cancel(&turn_id);
     {
         let runtime = state.lock().map_err(command_error)?;
@@ -7655,7 +7509,10 @@ mod long_message_tests {
     fn long_unicode_messages_are_accepted_without_truncation() {
         for length in [16_000, 16_001, 1_000_000] {
             let text = "文".repeat(length);
-            assert_eq!(validate_chat_content(&text).expect("valid long message"), text);
+            assert_eq!(
+                validate_chat_content(&text).expect("valid long message"),
+                text
+            );
         }
     }
 
@@ -7740,10 +7597,9 @@ fn resolve_codex_selection(resource_directory: &Path) -> Result<KernelSelection,
     if cfg!(feature = "bundled-official-kernel") {
         // Distribution builds use their own immutable package, not developer
         // environment variables or a neighbouring legacy executable.
-        let package = KernelPackage::load(
-            &resource_directory.join(kernel_desktop::BUNDLED_MANIFEST),
-        )
-        .map_err(|error| DesktopError::KernelSelection(error.to_string()))?;
+        let package =
+            KernelPackage::load(&resource_directory.join(kernel_desktop::BUNDLED_MANIFEST))
+                .map_err(|error| DesktopError::KernelSelection(error.to_string()))?;
         let selection = KernelSelection::Package(package);
         if !selection.is_upstream_preview() {
             return Err(DesktopError::KernelSelection(
@@ -7847,7 +7703,9 @@ fn codex_item_diff(item: &CodexThreadItem) -> Option<String> {
 
 fn codex_item_result(item: &CodexThreadItem, status: &str) -> String {
     let mut sections = Vec::new();
-    if let Some(name) = skill_library::read_skill_name(item) { sections.push(format!("已读取技能：{name}")); }
+    if let Some(name) = skill_library::read_skill_name(item) {
+        sections.push(format!("已读取技能：{name}"));
+    }
     sections.push(format!("Codex 操作状态：{status}"));
     if let Some(exit_code) = item.value.get("exitCode").and_then(Value::as_i64) {
         sections.push(format!("退出码：{exit_code}"));
@@ -8201,21 +8059,66 @@ mod tests {
 
     use super::{
         ActionPayload, ActionStatus, CodexTurnBinding, CreateTaskInput, DesktopError,
-        DesktopRuntime, DesktopToolContext, MAX_PROJECT_INSTRUCTION_BYTES,
-        ModelContextOverrides, PartialToolCall, PendingWriteDraft, PermissionLevel,
-        SaveModelProfileInput, StartChatInput, StartTurnInput, ToolDisposition, TurnOutcome,
-        capability_boundary, codex_permission_config, coding_tool_definitions, coding_tool_router,
-        decode_path_identity, deepseek_responses_base_url, diagnostic_event_details,
-        encode_path_identity, execute_authorized_action, execute_tool_call,
-        execute_tool_call_with_drafts, load_project_instruction, permission_system_prompt,
-        recover_truncated_write_calls, redact_sensitive_output, should_execute_tool_calls,
-        user_visible_path, validate_model_token_budget,
+        DesktopRuntime, DesktopToolContext, MAX_PROJECT_INSTRUCTION_BYTES, ModelContextOverrides,
+        PartialToolCall, PendingWriteDraft, PermissionLevel, SaveModelProfileInput, StartChatInput,
+        StartTurnInput, ToolDisposition, TurnOutcome, capability_boundary, codex_permission_config,
+        coding_tool_definitions, coding_tool_router, decode_path_identity,
+        deepseek_responses_base_url, diagnostic_event_details, encode_path_identity,
+        execute_authorized_action, execute_tool_call, execute_tool_call_with_drafts,
+        load_project_instruction, permission_system_prompt, recover_truncated_write_calls,
+        redact_sensitive_output, should_execute_tool_calls, user_visible_path,
+        validate_model_token_budget,
     };
     use crate::secrets::{MemorySecretStore, SecretStore};
 
     fn open_runtime(path: &std::path::Path) -> DesktopRuntime {
         DesktopRuntime::open(path, Arc::new(MemorySecretStore::new()))
             .expect("runtime should open local database")
+    }
+
+    #[test]
+    fn mode_context_is_durable_and_new_code_history_starts_empty() {
+        let (directory, mut runtime, simple_task, _, _) = runtime_with_completed_codex_turn();
+        let project_id = runtime.snapshot().unwrap().projects[0].id.clone();
+        let prepared = runtime
+            .prepare_codex_new_chat(&StartChatInput {
+                context_mode: super::ContextMode::Code,
+                project_id,
+                profile_id: None,
+                content: "code only".into(),
+                permission_level: PermissionLevel::Approval,
+            })
+            .unwrap();
+        assert_ne!(prepared.task_id, simple_task);
+        assert!(prepared.history_to_inject.is_empty());
+        assert_eq!(runtime.messages[&prepared.task_id].len(), 1);
+        assert_eq!(runtime.messages[&prepared.task_id][0].content, "code only");
+        let reopened = open_runtime(&directory.path().join("local-agent.db"));
+        let snapshot = reopened.snapshot().unwrap();
+        assert_eq!(
+            snapshot
+                .tasks
+                .iter()
+                .find(|t| t.id == prepared.task_id.to_string())
+                .unwrap()
+                .context_mode,
+            super::ContextMode::Code
+        );
+        assert_eq!(
+            snapshot
+                .tasks
+                .iter()
+                .find(|t| t.id == simple_task.to_string())
+                .unwrap()
+                .context_mode,
+            super::ContextMode::Simple
+        );
+        let home = "a".repeat(64);
+        assert_ne!(
+            super::ContextMode::Code.history_home(&home),
+            super::ContextMode::Simple.history_home(&home)
+        );
+        assert_eq!(super::ContextMode::Simple.history_home(&home), home);
     }
 
     #[test]
@@ -8353,6 +8256,7 @@ mod tests {
             .expect("save profile");
         let prepared = runtime
             .prepare_codex_new_chat(&StartChatInput {
+                context_mode: Default::default(),
                 project_id,
                 profile_id: None,
                 content: "原始问题".to_owned(),
@@ -9699,6 +9603,7 @@ mod tests {
         let content = "请读取这个项目并告诉我入口在哪里";
         let prepared = runtime
             .prepare_new_chat(StartChatInput {
+                context_mode: Default::default(),
                 project_id,
                 profile_id: None,
                 content: content.to_owned(),
@@ -10321,4 +10226,33 @@ mod tests {
         assert!(!output.contains("do-not-store"));
         assert!(!output.contains("hidden"));
     }
+}
+
+#[tauri::command]
+pub async fn steer_turn(
+    turn_id: String,
+    content: String,
+    state: State<'_, DesktopState>,
+) -> Result<(), String> {
+    if content.trim().is_empty() || content.len() > 128 * 1024 {
+        return Err("追加指令须为 1–128 KiB 的文本".into());
+    }
+    let target = state
+        .lock()
+        .map_err(command_error)?
+        .codex_interrupt_target(&turn_id)
+        .map_err(command_error)?
+        .ok_or("当前轮次尚未就绪或已结束，请使用下一轮队列")?;
+    let client = state
+        .codex_kernels
+        .lock()
+        .await
+        .get(&target.kernel_key)
+        .filter(|c| c.instance_id() == target.instance_id)
+        .cloned()
+        .ok_or("内核已切换，请确认任务状态")?;
+    CodexSessionBridge::new(client)
+        .steer_turn(&target.thread_id, &target.turn_id, &content)
+        .await
+        .map_err(command_error)
 }

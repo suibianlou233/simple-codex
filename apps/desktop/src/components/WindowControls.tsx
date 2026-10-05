@@ -19,7 +19,7 @@ export function WindowControls({onError}:{onError:(message:string)=>void}) {
       const appWindow=getCurrentWindow();
       if(action==="minimize")await appWindow.minimize();
       else if(action==="maximize"){await appWindow.toggleMaximize();setMaximized(await appWindow.isMaximized());}
-      // close() preserves the editor's unsaved-work confirmation. Never destroy here.
+      // Let the editor's unsaved-work guard handle the native close request.
       else await appWindow.close();
     }catch(error){onError(`窗口操作失败：${String(error)}`);}
   };

@@ -11,8 +11,6 @@ import type {
   SaveModelProfileInput,
   SaveLocalMcpServerInput,
   StartChatResult,
-  TerminalCommandResult,
-  TerminalSession,
   Unsubscribe,
 } from "./types";
 import { buildConversationTitle } from "../conversation";
@@ -275,6 +273,7 @@ export class MemoryDesktopBridge implements DesktopBridge {
     projectId: string,
     content: string,
     permissionLevel: PermissionLevel,
+    contextMode: "simple" | "code" = "simple",
   ): Promise<StartChatResult> {
     this.requireProject(projectId);
     if (!this.snapshot.activeModelProfileId) throw new Error("请先配置模型");
@@ -286,6 +285,7 @@ export class MemoryDesktopBridge implements DesktopBridge {
     const createdAt = now();
     this.snapshot.tasks.unshift({
       id: taskId,
+      contextMode,
       projectId,
       title: buildConversationTitle(message),
       goal: message,
@@ -353,7 +353,8 @@ export class MemoryDesktopBridge implements DesktopBridge {
     this.emit();
   }
 
-  async sendMessage(taskId: string, content: string): Promise<void> {
+  async sendMessage(taskId: string, content: string, contextMode?: "simple" | "code"): Promise<void> {
+    if(contextMode&&(this.snapshot.tasks.find(t=>t.id===taskId)?.contextMode??"simple")!==contextMode)throw new Error("会话不属于当前工作模式");
     if (!this.snapshot.activeModelProfileId) throw new Error("请先配置模型");
     const task = this.snapshot.tasks.find((item) => item.id === taskId);
     if (!task) throw new Error("任务不存在");
@@ -509,40 +510,10 @@ export class MemoryDesktopBridge implements DesktopBridge {
     };
   }
 
-  async readProjectFile(taskId: string, path: string) {
-    if (!this.snapshot.tasks.some((task) => task.id === taskId)) throw new Error("任务不存在");
-    return { path, content: "浏览器预览模式未连接本地文件服务。", sha256: "", truncated: false };
-  }
 
 
 
-  async openTerminal(taskId: string): Promise<TerminalSession> {
-    const task = this.snapshot.tasks.find((candidate) => candidate.id === taskId);
-    if (!task) throw new Error("任务不存在");
-    const project = this.snapshot.projects.find((candidate) => candidate.id === task.projectId);
-    return {
-      id: this.nextId("terminal"),
-      taskId,
-      projectId: task.projectId,
-      cwd: project?.path ?? ".",
-      processBoundary: "process_only",
-      createdAt: now(),
-    };
-  }
 
-  async runTerminalCommand(
-    _sessionId: string,
-    program: string,
-    args: string[],
-  ): Promise<TerminalCommandResult> {
-    return {
-      commandId: this.nextId("command"),
-      exitCode: 0,
-      stdout: `浏览器预览：${[program, ...args].join(" ")}`,
-      stderr: "",
-      truncated: false,
-    };
-  }
 
   private requireProject(projectId: string): void {
     if (!this.snapshot.projects.some((project) => project.id === projectId)) {

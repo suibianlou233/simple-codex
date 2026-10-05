@@ -75,10 +75,13 @@ it("folds all persisted commentary through the real bridge/store/render chain af
     onApprove:async()=>{},onReject:async()=>{},onUndo:async()=>{},onCancel:async()=>true,
     onRevise:async()=>true,onRegenerate:async()=>{},onBranch:async()=>{},
   }));
-  expect(html).toContain("执行过程 · 3 条说明");
-  expect(html.match(/class="completed-commentary"/g)).toHaveLength(1);
-  expect(html.indexOf("note-3")).toBeLessThan(html.indexOf("</details>"));
+  expect(html).toContain("用时 0秒");
+  expect(html.match(/class="turn-execution"/g)).toHaveLength(1);
+  expect(html.match(/chat-commentary/g)).toHaveLength(3);
+  expect(html).not.toMatch(/<details[^>]*class="turn-execution"[^>]* open/);
+  expect(html).not.toContain('data-slot="reasoning-root"');
   expect(html.indexOf("answer")).toBeGreaterThan(html.indexOf("</details>"));
+  expect(html.indexOf("note-3")).toBeLessThan(html.indexOf("</details>"));
   unsubscribe();
 });
 

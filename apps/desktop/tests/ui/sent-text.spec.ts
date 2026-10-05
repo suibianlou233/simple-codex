@@ -20,6 +20,7 @@ test("sent body remains a card, survives reload and opens intact in a resizable 
   await page.getByRole("button",{name:/新任务/}).click();
   await expect(page.getByRole("region",{name:"正文阅读栏"})).toHaveCount(0);
   await page.goto("/tests/ui/frontend-fixes.html?scenario=completed");
+  await page.getByText("前端回归",{exact:true}).click();
   expect(await page.locator(".chat-user .message-text").evaluate(el=>getComputedStyle(el).backgroundColor)).toBe(bubbleColor);
 });
 test("old long messages collapse without stored presentation metadata",async({page})=>{

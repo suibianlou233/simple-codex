@@ -10,10 +10,16 @@ pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()
         .manage(runtime::browser::BrowserState::default())
         .manage(runtime::skill_library::SkillState::default())
+        .manage(runtime::editor_ai::EditorAiState::default())
         .manage(runtime::interactive_terminal::PtyState::default())
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
-                window.state::<runtime::interactive_terminal::PtyState>().close_all();
+                window
+                    .state::<runtime::interactive_terminal::PtyState>()
+                    .close_all();
+                window
+                    .state::<runtime::editor_ai::EditorAiState>()
+                    .cancel_all();
                 for (label, browser) in window.app_handle().webviews() {
                     if label.starts_with("simple-browser-") {
                         let _ = browser.close();
@@ -52,7 +58,17 @@ pub fn run() -> tauri::Result<()> {
         .invoke_handler({
             let commands: fn(tauri::ipc::Invoke<tauri::Wry>) -> bool = tauri::generate_handler![
                 runtime::load_snapshot,
-                runtime::editor::editor_list, runtime::editor::editor_search, runtime::editor::editor_read, runtime::editor::editor_save, runtime::editor::editor_create, runtime::editor::editor_rename,
+                runtime::editor_ai::editor_assist,
+                runtime::editor_ai::editor_suggest,
+                runtime::editor_ai::editor_cancel_suggestion,
+                runtime::editor::editor_grep,
+                runtime::editor::editor_language_files,
+                runtime::editor::editor_list,
+                runtime::editor::editor_search,
+                runtime::editor::editor_read,
+                runtime::editor::editor_save,
+                runtime::editor::editor_create,
+                runtime::editor::editor_rename,
                 runtime::skill_library::skills_library_list,
                 runtime::skill_library::skills_codex_list,
                 runtime::skill_library::skills_import,
@@ -73,15 +89,12 @@ pub fn run() -> tauri::Result<()> {
                 runtime::browser::access::browser_access_pending,
                 runtime::browser::access::browser_access_resolve,
                 runtime::browser::access::browser_access_policy,
-                runtime::read_project_file,
                 runtime::load_workspace_diff,
                 runtime::interactive_terminal::pty_open,
                 runtime::interactive_terminal::pty_read,
                 runtime::interactive_terminal::pty_write,
                 runtime::interactive_terminal::pty_resize,
                 runtime::interactive_terminal::pty_close,
-                runtime::open_terminal,
-                runtime::run_terminal_command,
                 runtime::export_conversation,
                 runtime::export_diagnostics,
                 runtime::record_frontend_log,
@@ -103,6 +116,7 @@ pub fn run() -> tauri::Result<()> {
                 runtime::regenerate_response,
                 runtime::revise_message,
                 runtime::cancel_turn,
+                runtime::steer_turn,
                 runtime::approve_action,
                 runtime::reject_action,
                 runtime::undo_action,

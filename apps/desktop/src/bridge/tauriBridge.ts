@@ -14,8 +14,6 @@ import type {
   SaveModelProfileInput,
   SaveLocalMcpServerInput,
   StartChatResult,
-  TerminalCommandResult,
-  TerminalSession,
   TaskStatus,
   TaskSummary,
   TimelineEntry,
@@ -70,6 +68,7 @@ export type BackendProject = {
 };
 
 export type BackendTask = {
+  contextMode?: "simple" | "code";
   archived?: boolean;
   id: string;
   projectId: string;
@@ -305,10 +304,11 @@ export class TauriDesktopBridge implements DesktopBridge {
     projectId: string,
     content: string,
     permissionLevel: PermissionLevel,
+    contextMode: "simple" | "code" = "simple",
   ): Promise<StartChatResult> {
     const profileId = this.requireSnapshot().activeModelProfileId ?? undefined;
     const result = await invokeDesktop<StartChatResult>("start_chat", {
-      input: { projectId, profileId, content, permissionLevel },
+      input: { projectId, profileId, content, permissionLevel, contextMode },
     });
     const refreshed = this.accept(await invokeDesktop<BackendSnapshot>("load_snapshot"));
     this.publish({
@@ -328,10 +328,11 @@ export class TauriDesktopBridge implements DesktopBridge {
     );
   }
 
-  async sendMessage(taskId: string, content: string): Promise<void> {
+  async sendMessage(taskId: string, content: string, contextMode?: "simple" | "code"): Promise<void> {
     const profileId = this.requireSnapshot().activeModelProfileId;
     const turnId = await invokeDesktop<string>("start_turn", {
       input: { taskId, profileId, content },
+      contextMode: contextMode ?? this.requireSnapshot().tasks.find(task=>task.id===taskId)?.contextMode ?? "simple",
     });
     const refreshed = this.accept(await invokeDesktop<BackendSnapshot>("load_snapshot"));
     this.publish({ ...refreshed, activeTurnId: turnId });
@@ -408,24 +409,8 @@ export class TauriDesktopBridge implements DesktopBridge {
 
 
 
-  async readProjectFile(taskId: string, path: string) {
-    return invokeDesktop<import("./types").InspectorFile>("read_project_file", { taskId, path });
-  }
 
-  async openTerminal(taskId: string): Promise<TerminalSession> {
-    return invokeDesktop<TerminalSession>("open_terminal", { taskId });
-  }
 
-  async runTerminalCommand(
-    sessionId: string,
-    program: string,
-    args: string[],
-    cwd?: string,
-  ): Promise<TerminalCommandResult> {
-    return invokeDesktop<TerminalCommandResult>("run_terminal_command", {
-      input: { sessionId, program, args, cwd },
-    });
-  }
 
   private ensureEventListener(): void {
     if (this.eventListener) return;
@@ -600,6 +585,7 @@ export function projectBackendSnapshot(
 ): DesktopSnapshot {
   const projects: ProjectSummary[] = backend.projects.map((project) => ({ ...project }));
   const tasks: TaskSummary[] = backend.tasks.map((task) => ({
+    contextMode: task.contextMode ?? "simple",
     archived: task.archived ?? false,
     id: task.id,
     projectId: task.projectId,

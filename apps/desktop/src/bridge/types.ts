@@ -11,7 +11,9 @@ export type PermissionLevel =
   | "project_full_access"
   | "system_full_access";
 
+export type ContextMode = "simple" | "code";
 export type TaskSummary = {
+  contextMode?: ContextMode;
   archived?: boolean;
   id: string;
   projectId: string;
@@ -179,12 +181,6 @@ export type DesktopSnapshot = {
   runtime: RuntimeStatus;
 };
 
-export type InspectorFile = {
-  path: string;
-  content: string;
-  sha256: string;
-  truncated: boolean;
-};
 
 export type GitChangedFile = {
   path: string;
@@ -201,22 +197,7 @@ export type GitWorkspaceDiff = {
   unifiedDiff: string;
 };
 
-export type TerminalSession = {
-  id: string;
-  taskId: string;
-  projectId: string;
-  cwd: string;
-  processBoundary: "windows_job_object" | "process_only";
-  createdAt: string;
-};
 
-export type TerminalCommandResult = {
-  commandId: string;
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-  truncated: boolean;
-};
 
 export type CreateTaskInput = {
   projectId: string;
@@ -317,9 +298,10 @@ export interface DesktopBridge {
     projectId: string,
     content: string,
     permissionLevel: PermissionLevel,
+    contextMode?: ContextMode,
   ): Promise<StartChatResult>;
   setTaskPermission(taskId: string, permissionLevel: PermissionLevel): Promise<void>;
-  sendMessage(taskId: string, content: string): Promise<void>;
+  sendMessage(taskId: string, content: string, contextMode?: ContextMode): Promise<void>;
   regenerateResponse(taskId: string): Promise<void>;
   reviseMessage(taskId: string, messageId: string, content: string): Promise<void>;
   branchConversation(taskId: string, messageId: string): Promise<void>;
@@ -329,12 +311,4 @@ export interface DesktopBridge {
   undoAction(actionId: string): Promise<void>;
   cancelAction(actionId: string): Promise<void>;
   loadWorkspaceDiff(taskId: string): Promise<GitWorkspaceDiff>;
-  readProjectFile(taskId: string, path: string): Promise<InspectorFile>;
-  openTerminal(taskId: string): Promise<TerminalSession>;
-  runTerminalCommand(
-    sessionId: string,
-    program: string,
-    args: string[],
-    cwd?: string,
-  ): Promise<TerminalCommandResult>;
 }

@@ -1,0 +1,2 @@
+export type Finding={path:string;line:number;severity:"high"|"medium"|"low";title:string;detail:string};
+export function parseFindings(text:string):Finding[]{const value:unknown=JSON.parse(text);if(!Array.isArray(value)||value.length>20)throw new Error("审查结果格式无效");for(const f of value){if(!f||typeof f.path!=="string"||/^[/\\]|:/.test(f.path)||f.path.split(/[/\\]/).includes("..")||!Number.isSafeInteger(f.line)||f.line<1||!["high","medium","low"].includes(f.severity)||typeof f.title!=="string"||typeof f.detail!=="string")throw new Error("审查结果包含无效位置");}return value;}

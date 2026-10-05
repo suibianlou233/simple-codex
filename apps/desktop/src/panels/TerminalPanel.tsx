@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import {terminalFileLinks} from "./terminalLinks";
+import {FileOpenContext} from "../code/FileOpenContext";
+import { useContext, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { DesktopBridge } from "../bridge/types";
 import "@xterm/xterm/css/xterm.css";
 
-export function TerminalPanel({ taskId, onClose }: { bridge: DesktopBridge; taskId: string; onClose: () => void }) {
+export function TerminalPanel({ taskId, onClose, onSendError }: { onSendError?:(text:string)=>void;taskId: string; onClose: () => void }) {
+  const openFile=useContext(FileOpenContext);const openRef=useRef(openFile);openRef.current=openFile;
+  const [selection,setSelection]=useState("");
   const host = useRef<HTMLDivElement>(null);
   const [cwd, setCwd] = useState("本地终端");
   const [generation, setGeneration] = useState(0);
@@ -21,6 +24,10 @@ export function TerminalPanel({ taskId, onClose }: { bridge: DesktopBridge; task
       const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]);
       if (disposed || !host.current) return;
       const terminal = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, Menlo, monospace', scrollback: 5000, theme: { background: "#171a19", foreground: "#e2e7e4", cursor: "#e2e7e4" } });
+      terminal.onSelectionChange(()=>setSelection(terminal.getSelection()));
+      terminal.registerLinkProvider({provideLinks:(line,callback)=>{const bufferLine=terminal.buffer.active.getLine(line-1);const text=bufferLine?.translateToString(true)??"";
+        const cellColumn=(offset:number)=>{let units=0;for(let x=0;x<(bufferLine?.length??0);x++){const cell=bufferLine?.getCell(x);if(!cell||cell.getWidth()===0)continue;if(units>=offset)return x+1;units+=(cell.getChars()||" ").length;}return (bufferLine?.length??offset)+1;};
+        callback(terminalFileLinks(text).map(link=>({text:link.text,range:{start:{x:cellColumn(link.start),y:line},end:{x:cellColumn(link.end)-1,y:line}},activate:()=>openRef.current?.(link.target)})));}});
       const fit = new FitAddon();
       terminal.loadAddon(fit); terminal.open(host.current);
       const resize = () => { if (host.current && host.current.clientWidth > 0 && host.current.clientHeight > 0) fit.fit(); };
@@ -69,7 +76,7 @@ export function TerminalPanel({ taskId, onClose }: { bridge: DesktopBridge; task
     return () => { disposed = true; clearTimeout(timer); release(); if (id) void invoke("pty_close", { id }).catch(() => {}); };
   }, [taskId, generation]);
   return <section className="terminal-panel" aria-label="集成终端">
-    <header><div><strong>终端</strong><small title={cwd}>{cwd}</small></div>{ended ? <button type="button" onClick={() => setGeneration(value => value + 1)}>重新打开</button> : null}<button type="button" aria-label="收起终端" onClick={onClose}>×</button></header>
+    <header><div><strong>终端</strong><small title={cwd}>{cwd}</small></div>{onSendError?<button disabled={!selection.trim()} onClick={()=>onSendError(`请分析并修复以下终端报错，先定位原因，再修改并验证：\n\n${selection}`)}>选中报错交给 AI</button>:null}{ended ? <button type="button" onClick={() => setGeneration(value => value + 1)}>重新打开</button> : null}<button type="button" aria-label="收起终端" onClick={onClose}>×</button></header>
     <div className="terminal-screen" ref={host} />
     {error ? <p className="panel-error" role="alert">{error}</p> : null}
   </section>;

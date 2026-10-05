@@ -301,3 +301,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## Molecule workbench components (2026-09-19 notice repair)
+
+Simple uses @dtinsight/molecule 1.3.6 (package-declared author: DTStack
+Corporation; MIT) for SplitPane and Tabs. The npm release identifies upstream
+commit a114a2adc3c88bdc12e8b0693d09386a1d199ea7 at
+https://github.com/DTStack/molecule. pnpm-lock.yaml pins the package integrity.
+No upstream package code was modified for this notice repair.
+
+The published package and that commit's LICENSE both contain only `MIT`.
+`apps/desktop/public/licenses/molecule.txt` preserves that original declaration,
+records provenance and author attribution, and separately supplies the standard
+MIT terms from https://spdx.org/licenses/MIT.html. It does not invent an upstream
+copyright year or claim the supplement is a verbatim upstream full notice.
+The release license collector includes this supplement and rejects a missing,
+truncated or changed supplement. Version changes require a fresh source check.

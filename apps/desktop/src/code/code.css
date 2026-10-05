@@ -67,3 +67,105 @@
 .window-controls button:focus-visible {outline:2px solid var(--accent);outline-offset:-3px}
 .window-controls button:disabled {opacity:.45;cursor:default}
 @media(max-width:1050px){.code-workspace{grid-template-columns:145px minmax(0,1fr)}.code-mode .simple-mode-bar{gap:3px}.code-mode .simple-mode-bar select{max-width:120px}.code-mode .simple-mode-bar >button{font-size:11px}}
+
+/* Editor AI interactions keep the existing chat bubble palette. */
+.code-review-toggle {display:flex;justify-content:flex-end;gap:6px;padding:4px 8px;border-bottom:1px solid var(--border);font-size:12px}
+.inline-edit {flex:none;max-height:55%;overflow:auto;margin:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-subtle);font-size:12px;box-shadow:0 4px 18px #0001}
+.inline-edit>header,.inline-edit>form,.inline-edit>footer {display:flex;gap:8px;align-items:center;padding:10px 12px}
+.inline-edit>header>small {flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-tertiary)}
+.inline-edit input,.code-reference-picker input {flex:1;min-width:0;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:9px;font:inherit}
+.inline-edit>small,.inline-edit>p {display:block;margin:0;padding:0 12px 10px;color:var(--text-secondary)}
+.inline-edit>footer {justify-content:flex-end;border-top:1px solid var(--border)}
+.inline-edit>footer button:first-child {background:var(--text);color:var(--surface);padding:7px 12px;border-radius:6px}
+.code-diff {flex:1;min-width:0;overflow:auto;font-size:12px;background:var(--surface)}
+.code-diff>header {position:sticky;top:0;display:flex;align-items:center;gap:12px;background:var(--surface);padding:5px 12px;z-index:1;border-bottom:1px solid var(--border)}
+.code-diff>p {padding:12px;color:var(--text-secondary)}
+.code-diff-lines {min-width:max-content}
+.code-diff-line {display:flex;min-height:21px;line-height:21px;font-family:Consolas,Menlo,monospace}
+.code-diff-line>span {width:42px;flex:none;text-align:right;padding-right:8px;color:var(--text-tertiary);user-select:none}
+.code-diff-line>b {width:18px;flex:none;text-align:center;font-weight:400;user-select:none}
+.code-diff-line>code {white-space:pre;tab-size:4;padding-right:16px}
+.code-diff-line small {color:var(--text-tertiary);font-size:10px}
+.diff-add {background:color-mix(in srgb,#37a86b 15%,transparent)}
+.diff-remove {background:color-mix(in srgb,#d85c5c 14%,transparent)}
+.diff-added {color:#26965b}.diff-removed {color:#d25b5b}.diff-hunk {color:var(--accent)}
+.code-reference-picker {background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;padding:16px;width:min(600px,85vw);max-height:75vh;display:flex;flex-direction:column;gap:12px;box-shadow:0 18px 60px #0003}
+.code-reference-picker header {display:flex;align-items:center;justify-content:space-between}
+.code-reference-picker button {background:transparent;color:var(--text);border:0;padding:8px;border-radius:5px;cursor:pointer;text-align:left}
+.code-reference-picker button:hover {background:var(--surface-hover)}
+.code-reference-picker>div {overflow:auto;display:flex;flex-direction:column}
+.code-reference-picker small {color:var(--text-secondary)}
+.code-review {flex:1;min-height:0;overflow:auto;font-size:12px;padding:12px}
+.code-review>header,.code-review>nav {display:flex;justify-content:space-between;gap:8px;margin-bottom:12px}
+.code-review>nav {justify-content:flex-start}
+.code-review button[aria-pressed=true] {background:var(--surface-hover);color:var(--text)}
+.code-review>p,.code-review article>small {color:var(--text-secondary);line-height:1.7}
+.code-review article {border:1px solid var(--border);border-radius:8px;margin:12px 0;overflow:hidden}
+.code-review article>h3,.code-review article>small,.code-review article>p {display:block;margin:8px 12px;overflow-wrap:anywhere}
+.code-patch {overflow:auto;max-height:65vh;font-size:12px;line-height:1.7;tab-size:4}
+.code-patch>span {display:block;min-width:max-content;white-space:pre;padding:0 8px;line-height:1.3}
+
+.project-search {display:flex;flex-direction:column;gap:7px;padding:8px;border-bottom:1px solid var(--border);max-height:55vh;overflow:auto}
+.project-search button {display:flex;flex-direction:column;align-items:flex-start;padding:8px;min-height:44px;text-align:left}
+.project-search span,.project-search strong {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;font-size:11px}
+.project-search small,.code-navigation small,.code-assistant small {font-size:11px;color:var(--text-secondary)}
+.project-search label {font-size:11px;display:flex;align-items:center}.project-search input[type=checkbox]{width:auto}
+.edit-hunk {border-top:1px solid var(--border)}.edit-hunk>label{display:block;padding:8px 12px}
+.code-navigation {display:flex;flex-wrap:wrap;gap:8px;padding:5px 8px;flex:none;font-size:11px;border-bottom:1px solid var(--border)}
+.code-locations {display:flex;flex-direction:column;max-height:140px;overflow:auto;font-size:12px;flex:none}.code-locations button{text-align:left;padding:5px}
+.code-assistant {padding:16px;overflow:auto;min-height:0;font-size:13px;flex:1}.code-assistant header{display:flex;justify-content:space-between;gap:12px}.code-assistant pre{white-space:pre-wrap;font:inherit;line-height:1.8;border-top:1px solid var(--border);padding-top:12px}.code-assistant textarea{display:block;width:100%;min-height:85px;resize:vertical;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:10px;box-sizing:border-box;margin-bottom:8px}.code-assistant button{padding:7px 12px;border:1px solid var(--border);border-radius:6px;margin:4px}.code-assistant>small{display:block}
+
+/* Code mode uses a compact agent sidepane; Simple retains its conversation layout. */
+.code-mode > .workspace {display:flex;flex-direction:column}
+.code-chat-header {height:40px;min-height:40px;display:flex;align-items:center;gap:10px;padding:0 10px;border-bottom:1px solid var(--border);font-size:12px}
+.code-chat-tab {height:100%;display:flex;align-items:center;border-bottom:2px solid var(--text-secondary);padding:0 6px;font-weight:600}
+.code-chat-session {display:flex;align-items:center;gap:5px;flex:1;min-width:0}
+.code-chat-session select {margin-left:auto;min-width:0;max-width:calc(100% - 35px);width:180px;border:0;background:transparent;color:var(--text-secondary);font:inherit;text-overflow:ellipsis;outline-offset:2px}
+.code-chat-session button {flex:none;width:27px;height:27px;border:0;border-radius:5px;background:transparent;color:var(--text-secondary);font-size:20px;cursor:pointer}
+.code-chat-session button:hover {background:var(--surface-hover)}
+.code-mode .workspace-banners {flex:none}
+.code-mode .timeline {flex:1;min-height:0}
+.code-mode .workspace-welcome .timeline {display:block}
+.code-chat-empty {padding:28px 20px;font-size:12px;color:var(--text-secondary)}
+.code-chat-empty strong {font-size:13px;font-weight:500;color:var(--text)}
+.code-chat-empty p {line-height:1.7;margin:8px 0 14px}
+.code-chat-empty span {font-size:11px;color:var(--text-tertiary)}
+.code-mode .timeline-stack {width:calc(100% - 28px);margin:18px auto 14px}
+.code-mode .chat-message {margin-bottom:18px}
+.code-mode .chat-user .message-column {width:100%;max-width:100%}
+.code-mode .chat-user .message-text {border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.65}
+.code-mode .markdown-message {font-size:13px;line-height:1.7}
+.code-mode .composer-shell,.code-mode .workspace-welcome .composer-shell {flex:none;padding:8px 10px 10px;margin:0}
+.code-mode .composer {width:100%;padding:8px 10px 7px;border-radius:9px;box-shadow:none}
+.code-mode .composer:focus-within {box-shadow:none}
+.code-mode .composer textarea {font-size:13px;line-height:1.6;min-height:66px;padding:7px 2px 10px}
+.code-composer-context {display:flex;align-items:center;gap:8px;min-width:0;font-size:11px}
+.code-composer-context button {border:0;border-radius:4px;padding:3px 5px;background:transparent;color:var(--text-secondary);font:inherit;cursor:pointer}
+.code-composer-context button:hover {background:var(--surface-hover)}
+.code-composer-context span {margin-left:auto;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-tertiary)}
+.code-mode .composer-toolbar {gap:3px;flex-wrap:wrap}
+.code-mode .composer-toolbar .icon-button {width:25px;height:25px;padding:3px}
+.code-mode .composer-model {flex:1;min-width:70px;max-width:180px}
+.code-mode .composer-model select {max-width:100%;font-size:11px;padding:4px}
+.code-mode .composer-meta {margin-top:6px;padding:0 2px;font-size:10px;gap:8px}
+.code-mode .composer-project {display:none}
+.code-mode .composer-spacer {flex:0}
+.code-mode .composer-toolbar>button[type=submit],.code-mode .composer-toolbar>.stop-button {width:27px;height:27px;margin-left:auto;border-radius:6px}
+
+/* Quiet editing surface. Commands appear only when requested. */
+.code-editing {position:relative}
+.code-status {display:flex;align-items:center;gap:14px;min-height:25px;padding:0 10px;border-top:1px solid color-mix(in srgb,var(--border) 55%,transparent)}
+.code-status>span:first-child {flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.code-status>span:nth-child(2) {white-space:nowrap}
+.code-status>button {font-size:16px;padding:0 5px;color:var(--text-tertiary)}
+.editor-command-menu {position:fixed;z-index:10000;min-width:248px;max-width:min(380px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;padding:5px;border:1px solid var(--border);border-radius:10px;background:var(--surface);box-shadow:0 8px 32px #0002;color:var(--text);font-size:12px;animation:editor-menu-in 100ms ease-out}
+.editor-command-menu button {display:flex;align-items:center;gap:24px;width:100%;padding:7px 9px;border:0;border-radius:5px;background:transparent;color:inherit;text-align:left;font:inherit;cursor:pointer}
+.editor-command-menu button>span {flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.editor-command-menu kbd {font:inherit;font-size:10px;color:var(--text-tertiary);white-space:nowrap}
+.editor-command-menu button:hover:enabled,.editor-command-menu button:focus-visible {background:var(--surface-hover);outline:none}
+.editor-command-menu button:disabled {opacity:.35;cursor:default}
+.editor-command-menu [role=separator] {height:1px;background:var(--border);margin:5px 6px}
+.code-workspace button,.code-chat-header button,.code-composer-context button {transition:background-color 120ms ease,color 120ms ease}
+.code-editing .code-empty h2 {font-size:16px;font-weight:450}.code-editing .code-empty p {font-size:12px;line-height:1.7}
+@keyframes editor-menu-in {from {opacity:0;transform:translateY(-3px)}to {opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.editor-command-menu{animation:none}.code-workspace button,.code-chat-header button,.code-composer-context button{transition:none}}

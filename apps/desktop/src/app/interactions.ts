@@ -16,12 +16,3 @@ export function isComposingKey(event: { isComposing: boolean; keyCode: number })
 export function composerHeight(scrollHeight: number): number {
   return Math.min(180, Math.max(34, scrollHeight));
 }
-
-export function toggleInspector<T extends string>(current: T | undefined, next: T): T | undefined {
-  return current === next ? undefined : next;
-}
-
-export function emptyConversationLabel(hasProject: boolean, query: string): string {
-  if (!hasProject) return "打开项目后，对话会出现在这里";
-  return query.trim() ? "没有找到匹配的对话，试试其他关键词" : "还没有对话";
-}

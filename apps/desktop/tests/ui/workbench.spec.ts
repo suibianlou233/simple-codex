@@ -58,7 +58,8 @@ test("completion waits remain active and keep stop available without claiming su
     await page.goto(`/tests/ui/fixture.html?scenario=${scenario}`);
     await expect(page.locator(".turn-status")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "停止回复", exact: true })).toBeEnabled();
-    await expect(page.getByRole("textbox", { name: "给 Simple 的任务" })).toBeDisabled();
+    if (scenario === "completion-wait") await expect(page.getByRole("textbox", { name: "给 Simple 的任务" })).toBeEnabled();
+    else await expect(page.getByRole("textbox", { name: "给 Simple 的任务" })).toBeDisabled();
     await expect(page.locator("body")).not.toContainText("处理已结束");
   }
   await page.screenshot({ path: info.outputPath("completion-uncertain.png") });
@@ -94,10 +95,12 @@ test("native final answer streams beside commentary before completion", async ({
   await page.getByRole("button", {name:"模拟开始最终回复"}).click();
   await expect(page.getByText("修改完成，", {exact:true})).toBeVisible();
   await expect(page.locator(".work-process")).toContainText("正在处理任务");
-  await expect(page.getByText("正在读取相关文件。", {exact:true})).toBeVisible();
+  await expect(page.getByText("正在读取相关文件。", {exact:true})).toBeHidden();
   await page.getByRole("button", {name:"模拟完成本轮"}).click();
   await expect(page.getByText("修改完成，尚未验证。", {exact:true})).toBeVisible();
-  await expect(page.locator(".completed-commentary > summary")).toContainText("执行过程 · 2 条说明");
+  await expect(page.locator(".turn-execution > summary")).toContainText("用时");
+  await expect(page.locator(".turn-execution")).not.toHaveAttribute("open", "");
+  await expect(page.locator(".turn-execution .chat-commentary")).toHaveCount(2);
   await expect(page.locator(".chat-assistant")).toHaveCount(3);
   await expect(page.locator(".chat-assistant:visible")).toHaveCount(1);
   await expect(page.locator(".work-process")).toHaveCount(0);
@@ -112,15 +115,17 @@ test("users can expand completed commentary without obscuring the final reply", 
   await expect(page.getByText("正在读取相关文件。", { exact: true })).toBeVisible();
   await expect(page.getByText("正在更新输入法处理。", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("正在处理任务");
-  await expect(page.locator(".completed-commentary")).toHaveCount(0);
+  await expect(page.locator(".process-reasoning .aui-reasoning-trigger")).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: "模拟完成本轮" }).click();
   await expect(page.getByText("修改完成，尚未验证。", { exact: true })).toBeVisible();
   await expect(page.getByText("正在读取相关文件。", { exact: true })).not.toBeVisible();
-  await expect(page.locator(".completed-commentary > summary")).toContainText("执行过程 · 2 条说明");
-  await page.locator(".completed-commentary > summary").click();
+  await expect(page.locator(".turn-execution > summary")).toContainText("用时");
+  await expect(page.locator(".turn-execution")).not.toHaveAttribute("open", "");
+  await expect(page.locator(".turn-execution .chat-commentary")).toHaveCount(2);
+  await page.locator(".turn-execution > summary").click();
   await expect(page.getByText("正在读取相关文件。", { exact: true })).toBeVisible();
   await expect(page.getByText("正在更新输入法处理。", { exact: true })).toBeVisible();
-  await page.locator(".completed-commentary > summary").click();
+  await page.locator(".turn-execution > summary").click();
   await expect(page.getByText("正在读取相关文件。", { exact: true })).not.toBeVisible();
   await expect(page.getByText("修改完成，尚未验证。", { exact: true })).toBeVisible();
   await expect(page.locator(".work-process")).toHaveCount(0);
@@ -130,6 +135,7 @@ test("welcome, suggestion, keyboard send and theme", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/tests/ui/fixture.html?scenario=welcome");
+  await page.getByRole("button", {name: "新任务 Ctrl N", exact: true}).click();
   await expect(page.getByRole("heading", { name: "今天，想做点什么？" })).toBeVisible();
   await page.screenshot({ path: info.outputPath("welcome-light.png") });
   await page.getByRole("button", { name: /理解项目/ }).click();
@@ -309,6 +315,6 @@ test("attachment-only send survives model configuration", async ({ page }) => {
   await page.getByLabel("接口地址").fill("http://127.0.0.1/unused");
   await page.getByLabel("模型名称").fill("mock");
   await page.getByRole("button", { name: /保存并使用/ }).click();
-  await expect(page.locator(".chat-user")).toContainText("docs/ui-fixture.md");
+  await expect(page.locator(".chat-user").last()).toContainText("docs/ui-fixture.md");
   await expect(page.getByLabel("待发送附件")).toHaveCount(0);
 });

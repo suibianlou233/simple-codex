@@ -4,7 +4,6 @@ import { App } from "../../src/App";
 import { GUIDE_SEEN_KEY } from "../../src/app/onboarding";
 import { rememberSentText } from "../../src/app/sentText";
 import { MemoryDesktopBridge } from "../../src/bridge/memoryBridge";
-import type { GitWorkspaceDiff } from "../../src/bridge/types";
 import "../../src/styles.css";
 import "../../src/design/workbench.css";
 
@@ -16,26 +15,11 @@ const documentBody = "第一章 陨落的天才\n" + "这是需要保留的正�
 const documentInstruction = "请提取前三章并进行分析";
 const documentMessage = documentBody + documentInstruction;
 class FixtureBridge extends MemoryDesktopBridge {
-  private lists = 0;
-  private reads = new Map<string, number>();
   private revisions = 0;
   private sends = 0;
   override async sendMessage(taskId: string, content: string) {
     if (scenario !== "paste-send") return super.sendMessage(taskId, content);
     if (++this.sends === 1) throw new Error("fixture send failed");
-  }
-  override async loadWorkspaceDiff(): Promise<GitWorkspaceDiff> {
-    const call = ++this.lists;
-    if (scenario === "selection-race" && call === 2) await new Promise((resolve) => setTimeout(resolve, 300));
-    return {supported:true,summary:"fixture",unifiedDiff:"fixture diff",
-      files: scenario === "remove" && call > 1 ? [] : ["a.ts", "b.ts"].map((path) => ({path,additions:1,deletions:0,status:"M"}))};
-  }
-  override async readProjectFile(_taskId: string, path: string) {
-    const call = (this.reads.get(path) ?? 0) + 1;
-    this.reads.set(path, call);
-    if (scenario === "late-read" && path === "a.ts" && call === 1) await new Promise((resolve) => setTimeout(resolve, 350));
-    if (scenario === "read-error" && call === 2) throw new Error("fixture file unavailable");
-    return {path,content:`${path} version ${call}`,sha256:`fixture-${call}`,truncated:false};
   }
   override async reviseMessage() {
     this.revisions++;

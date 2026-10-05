@@ -1,5 +1,5 @@
 export type EditorFile = { path: string; content: string; sha256: string };
-export type Buffer = EditorFile & { projectId: string; saved: string; disk?: EditorFile };
+export type Buffer = EditorFile & { projectId: string; saved: string; disk?: EditorFile; unavailable?:string };
 export function reconcile(file: Buffer, disk: EditorFile): Buffer {
   if (disk.sha256 === file.sha256) return {...file, disk: undefined};
   if (file.content !== file.saved) return {...file, disk};

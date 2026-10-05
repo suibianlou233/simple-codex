@@ -1,0 +1,8 @@
+.composer-queue {margin:0 0 8px;padding:10px 14px;background:var(--surface-subtle);border:1px solid var(--border);border-radius:14px;font-size:12px;color:var(--text-secondary);}
+.composer-queue header {display:flex;align-items:center;gap:8px;margin-bottom:5px}.composer-queue header small{color:var(--text-tertiary)}
+.composer-queue ol{list-style:none;margin:0;padding:0;max-height:130px;overflow:auto}.composer-queue li{display:flex;align-items:center;gap:10px;min-height:29px}.composer-queue li>span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.composer-queue button{border:0;background:transparent;color:inherit;cursor:pointer;padding:4px 8px}.composer-queue button:hover{background:var(--surface-hover);border-radius:5px}.composer-queue p{margin:6px 0;overflow-wrap:anywhere}.composer-queue .queue-resume{text-decoration:underline;padding-left:0}
+.composer-toolbar .queue-send{font-size:12px;padding:6px 10px;white-space:nowrap}.composer-toolbar .queue-steer{font-size:11px;background:transparent;color:var(--text-secondary);padding:5px;white-space:nowrap}
+
+.workspace .composer-toolbar>button.queue-send[type=submit],.composer-toolbar>button.queue-send[type=submit]{width:auto;min-width:72px;height:30px;padding:5px 10px;border-radius:8px;flex:0 0 auto;margin-left:auto;}
+.workspace .composer-toolbar>button.queue-steer,.composer-toolbar>button.queue-steer{width:auto;height:30px;border:0;border-radius:7px;flex:0 0 auto;margin:0;padding:5px 8px;background:transparent;}
+.workspace .composer-toolbar>.queue-steer+.stop-button,.workspace .composer-toolbar>.queue-send+.stop-button{margin-left:0;}

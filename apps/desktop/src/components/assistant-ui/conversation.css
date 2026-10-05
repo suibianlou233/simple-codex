@@ -1,0 +1,19 @@
+.workspace .aui-thread-viewport {padding:32px max(24px, calc((100% - 780px)/2));scrollbar-gutter:stable;}
+.aui-thread-viewport .chat-message {margin-bottom:28px;}
+.aui-thread-viewport .chat-user {display:flex;justify-content:flex-end;}
+.aui-thread-viewport .chat-user .message-column {flex:initial;max-width:85%;padding:13px 18px;border-radius:20px 20px 5px 20px;background:var(--surface-subtle);border:1px solid var(--border);}
+.aui-thread-viewport .chat-assistant .message-column {width:100%;max-width:100%;}
+.aui-thread-viewport .message-actions {gap:12px;margin-top:10px;opacity:.65;}
+.aui-thread-viewport .chat-message:hover .message-actions,.aui-thread-viewport .chat-message:focus-within .message-actions {opacity:1;}
+.workspace .composer-shell {width:100%;max-width:828px;margin:0 auto;padding:12px 24px 18px;}
+.workspace .composer {border:1px solid var(--border);border-radius:20px;box-shadow:0 4px 20px #00000006;background:var(--surface);padding:14px 16px 10px;}
+.workspace .composer:focus-within {border-color:var(--text-tertiary);box-shadow:0 4px 24px #00000009;}
+.workspace .composer textarea {font-size:14px;line-height:1.65;min-height:52px;}
+.workspace .composer-toolbar {padding-top:8px;gap:8px;}
+.workspace .composer-meta {padding:8px 4px 0;font-size:10px;}
+.code-mode .workspace .aui-thread-viewport {padding:20px 18px;}
+.code-mode .workspace .composer-shell {padding:10px 12px;}
+.code-mode .aui-thread-viewport .chat-user .message-column {max-width:94%;}
+@media(max-width:640px) {.workspace .aui-thread-viewport{padding:20px 16px}.workspace .composer-shell{padding:8px 12px 12px}.aui-thread-viewport .chat-user .message-column{max-width:94%}}
+
+.aui-thread-viewport .chat-user .message-text {background:transparent;border:0;padding:0;margin:0;}

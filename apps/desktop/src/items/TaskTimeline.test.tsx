@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { TaskTimeline, executionGroups } from "./TaskTimeline";
+import { TaskTimeline } from "./TaskTimeline";
 import type { TimelineEntry, TurnSummary, ToolActionSummary } from "../bridge/types";
 
 const entry = (id: string, kind: TimelineEntry["kind"] = "assistant", turnId = "turn-1"): TimelineEntry =>
@@ -17,6 +17,21 @@ function render(entries: TimelineEntry[], turns: TurnSummary[], activeTurnId?: s
   }));
 }
 describe("user-facing conversation", () => {
+  it("omits message actions on process notes and streaming output, retaining them on final replies", () => {
+    const note = {...entry("process-note"), phase:"commentary" as const};
+    const partial = {...entry("partial"), status:"streaming" as const};
+    for (const message of [note, partial]) {
+      const html = render([message], [turn("running")], "turn-1");
+      expect(html).toContain(message.detail);
+      expect(html).not.toContain('class="message-actions"');
+      expect(html).not.toContain("从这里分支");
+    }
+    const html = render([entry("request", "user"), note,
+      {...entry("answer"), phase:"final_answer"}], [turn("completed")]);
+    expect(html.match(/class="message-actions"/g)).toHaveLength(2);
+    expect(html).toContain("重新生成");
+    expect(html).toContain("编辑");
+  });
   it("shows phase-less provider deltas while running and suppresses failed partial output", () => {
     const partial = {...entry("千问正在逐字输出"), status:"streaming" as const};
     expect(render([partial],[turn("running")],"turn-1")).toContain("千问正在逐字输出");
@@ -28,19 +43,19 @@ describe("user-facing conversation", () => {
       {...entry("first-note"),phase:"commentary"}, entry("hidden-tool","command"),
       {...entry("second-note"),phase:"commentary"}, entry("hidden-lifecycle","lifecycle"),
       {...entry("third-note"),phase:"commentary"}, {...entry("answer"),phase:"final_answer"}], [turn(status)]);
-    expect(html.match(/class="completed-commentary"/g)).toHaveLength(1);
-    expect(html).toContain("执行过程 · 3 条说明");
-    expect(html).not.toContain('class="completed-commentary" open');
+    expect(html.match(/class="turn-execution"/g)).toHaveLength(1);
+    expect(html).toContain("用时未记录");
+    expect(html).not.toContain('class="turn-execution" open');
     expect(html).not.toContain("hidden-tool");
-    expect(html.indexOf("third-note")).toBeLessThan(html.indexOf("</details>"));
-    if (status === "completed") expect(html.indexOf("answer")).toBeGreaterThan(html.indexOf("</details>"));
-    else expect(html.indexOf(status === "failed" ? "这次任务未能完成" : "任务已停止")).toBeGreaterThan(html.indexOf("</details>"));
+    expect(html.indexOf("third-note")).toBeGreaterThan(html.indexOf('class="turn-execution-content"'));
+    if (status === "completed") expect(html.indexOf("answer")).toBeGreaterThan(html.indexOf("third-note"));
+    else expect(html.indexOf(status === "failed" ? "这次任务未能完成" : "任务已停止")).toBeGreaterThan(html.indexOf("third-note"));
   });
   it("does not merge folded notes across distinct turns", () => {
     const html = render([{...entry("note-a"),phase:"commentary"},
       {...entry("note-b","assistant","turn-2"),phase:"commentary"}],
       [turn("completed"),{...turn("cancelled"),id:"turn-2"}]);
-    expect(html.match(/class="completed-commentary"/g)).toHaveLength(2);
+    expect(html.match(/class="turn-execution"/g)).toHaveLength(2);
     expect(html).toContain("任务已停止");
   });
   it("anchors two old cancelled text turns before the latest conversation instead of at the footer", () => {
@@ -133,25 +148,26 @@ describe("user-facing conversation", () => {
       [entry("request", "user"), {...entry("progress"),phase:"commentary"}, entry("tool", "file_read"), entry("final", "assistant")],
       [root],
     );
-    expect(html).toContain("本轮用时 00:12");
-    expect(html.indexOf("本轮用时")).toBeGreaterThan(html.indexOf("<summary>执行过程"));
-    expect(html.indexOf("本轮用时")).toBeLessThan(html.indexOf("</summary>"));
-    expect(html.match(/class="turn-elapsed"/g)).toHaveLength(1);
+    expect(html).toContain("用时 12秒");
+    expect(html.indexOf("用时 12秒")).toBeGreaterThan(html.indexOf('<summary>'));
+    expect(html.indexOf("用时 12秒")).toBeLessThan(html.indexOf('class="turn-execution-content"'));
+    expect(html.match(/class="turn-execution"/g)).toHaveLength(1);
     expect(html).not.toContain("正在处理任务");
   });
   it("does not invent an elapsed time when a folded turn has no end timestamp", () => {
     const html = render([{...entry("progress"),phase:"commentary"}], [{...turn("completed"),finishedAt:null}]);
-    expect(html).toContain("执行过程");
+    expect(html).toContain("用时未记录");
     expect(html).not.toContain("本轮用时");
   });
-  it("omits the elapsed label for completed turns without tool work", () => {
+  it("shows elapsed time for completed turns without tool work", () => {
     const root = {
       ...turn("completed"),
       startedAt: "2026-09-05T00:00:00Z",
       finishedAt: "2026-09-05T00:00:12Z",
     };
     const html = render([entry("request", "user"), entry("final", "assistant")], [root]);
-    expect(html).not.toContain("本轮用时");
+    expect(html).toContain("用时 12秒");
+    expect(html.indexOf("用时 12秒")).toBeLessThan(html.indexOf("final"));
   });
   it("restores undo after confirmed completion even if an obsolete active id remains", () => {
     expect(render([entry("old", "user")], [turn("completed")], "turn-1", [applied])).toContain("撤销修改");
@@ -194,19 +210,19 @@ describe("user-facing conversation", () => {
     const html = render(messages, [turn("running")], "turn-1");
     expect(html).toContain("final streaming text");
     expect(html).toContain("intermediate-note");
-    expect(html).not.toContain("completed-commentary");
+    expect(html).not.toContain('class="turn-execution" open');
     expect(html).toContain("正在处理任务");
     const completed = render(messages, [turn("completed")]);
-    expect(completed).toContain("执行过程 · 1 条说明");
-    expect(completed.indexOf("intermediate-note")).toBeLessThan(completed.indexOf("</details>"));
-    expect(completed.indexOf("final streaming text")).toBeGreaterThan(completed.indexOf("</details>"));
+    expect(completed).toContain("用时未记录");
+    expect(completed).not.toContain('class="turn-execution" open');
+    expect(completed.indexOf("final streaming text")).toBeGreaterThan(completed.indexOf("intermediate-note"));
     expect(render(messages, [turn("failed")])).not.toContain("final streaming text");
   });
   it("keeps commentary-only completion inside a closed process disclosure", () => {
     const html = render([{...entry("interim only"), phase: "commentary"}], [turn("completed")]);
-    expect(html).toContain("执行过程 · 1 条说明");
-    expect(html.indexOf("interim only")).toBeLessThan(html.indexOf("</details>"));
-    expect(html).not.toContain('class="completed-commentary" open');
+    expect(html).toContain("用时未记录");
+    expect(html).toContain("interim only");
+    expect(html).not.toContain('class="turn-execution" open');
   });
   const entries = [entry("request", "user"), entry("read-note"), entry("edit-note"), entry("final-answer")];
   it("shows the final answer, never exposes completed troubleshooting messages", () => {
@@ -331,17 +347,13 @@ it("shows real execution steps during work and retains a folded history after co
     status:"running",title:"统计小说字数",detail:"fixture command",diff:null,result:null,canUndo:false,createdAt:""};
   const live = render([entry("request","user")],[{...turn("running"),phase:"preparing_kernel"}],"turn-1",[action]);
     expect(live).toContain("执行命令");
-    expect(live).not.toContain('<details class="execution-steps" open');
+    expect(live).toContain('class="execution-step"');
+    expect(live).not.toContain('class="execution-step-body"');
   expect(live).not.toContain("正在连接执行内核");
   const ended = render([entry("request","user")],[turn("completed")],undefined,[{...action,status:"applied"}]);
     expect(ended).toContain("执行命令");
   expect(ended).toContain("已完成");
-  expect(ended).not.toContain('<details class="execution-steps" open');
+  expect(ended).toContain('class="turn-execution"');
+  expect(ended).not.toMatch(/<details[^>]*class="turn-execution"[^>]* open/);
+  expect(ended).not.toContain('class="execution-step-body"');
   });
-
-it("groups consecutive operations without merging failures or implying stale commands are running",()=>{
-  const base: ToolActionSummary={id:"a",taskId:"t",turnId:"turn",kind:"run_command",status:"applied",title:"PRIVATE_COMMAND",detail:"",result:null,diff:null,canUndo:false,createdAt:""};
-  const actions:ToolActionSummary[]=[base,{...base,id:"b"},{...base,id:"c",status:"failed"},{...base,id:"d"},{...base,id:"e",status:"running"}];
-  expect(executionGroups(actions,true,false).map(g=>[g.status,g.count])).toEqual([["applied",2],["failed",1],["applied",1],["running",1]]);
-  expect(executionGroups(actions,false,false).at(-1)?.status).toBe("unknown");
-});

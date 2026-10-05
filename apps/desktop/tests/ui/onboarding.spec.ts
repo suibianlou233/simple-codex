@@ -37,7 +37,7 @@ test("guide opens existing configuration without sending a task", async ({ page 
   await settings.getByLabel("API Key", { exact: true }).fill("fixture-not-a-real-key");
   await settings.getByRole("button", { name: "保存并使用" }).click();
   await expect(settings).toHaveCount(0);
-  await expect(page.locator(".chat-message")).toHaveCount(0);
+  await expect(page.locator("body")).toHaveAttribute("data-chat-starts", "0");
   await expect(page.getByRole("combobox", { name: "选择模型" })).toContainText("deepseek-v4-flash");
   await page.reload();
   await expect(page.getByRole("button", { name: "设置", exact: true })).toBeVisible();

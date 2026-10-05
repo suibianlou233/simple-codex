@@ -27,7 +27,7 @@
 /.codex/
 /test-results/
 /playwright-report/
+/HANDOFF-SHA256.json
 /kernels/packages/official-283-macos-candidate-1/
 *.dmg
 *.app/
-

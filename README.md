@@ -60,7 +60,6 @@ See [development setup](docs/DEVELOPMENT.md), the [kernel manifest](kernels/pack
 - A Windows compound command can have an intermediate failure even when its final exit code is successful. Check the actual result.
 - The recorded Windows V8 patch disables V8's internal sandbox, distinct from operating-system command sandboxing. Do not treat the app as a fully verified security boundary.
 - Git workspace diffs are not exact per-turn diffs. There is no whole-project snapshot-based undo; reverting a conversation does not revert its file changes.
-- A known settings issue can hide the local memory panel when capability loading fails.
 
 ## FAQ
 

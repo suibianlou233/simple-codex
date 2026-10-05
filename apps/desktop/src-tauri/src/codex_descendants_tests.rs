@@ -34,6 +34,7 @@ fn fixture() -> (
         .expect("profile");
     let prepared = runtime
         .prepare_codex_new_chat(&StartChatInput {
+            context_mode: Default::default(),
             project_id,
             profile_id: None,
             content: "fixture".into(),
