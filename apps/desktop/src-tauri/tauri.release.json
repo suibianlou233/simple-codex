@@ -15,6 +15,7 @@
       "../../../kernels/packages/official-283-windows-candidate-1/PATCHES.json": "kernels/official-283-windows-candidate-1/PATCHES.json",
       "resources/simple-resources/simple-command-runner.exe": "simple-resources/simple-command-runner.exe",
       "resources/simple-resources/simple-windows-sandbox-setup.exe": "simple-resources/simple-windows-sandbox-setup.exe",
+      "resources/simple-resources/skills/generate-media/SKILL.md": "simple-resources/skills/generate-media/SKILL.md",
       "../../../LICENSE": "LICENSE",
       "../../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },

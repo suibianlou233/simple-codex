@@ -34,6 +34,10 @@ pub fn run() -> tauri::Result<()> {
                 runtime::kernel_desktop::Startup::resolve(&base_directory, &resource_directory)
                     .map_err(std::io::Error::other)?;
             let data_directory = startup.data;
+            app.manage(
+                runtime::media_generation::MediaGenerationState::new(&data_directory)
+                    .map_err(std::io::Error::other)?,
+            );
             logging::initialize(data_directory.join("local-agent.jsonl"));
             let state = runtime::DesktopState::open(
                 &data_directory.join("local-agent.db"),
@@ -83,6 +87,17 @@ pub fn run() -> tauri::Result<()> {
                 runtime::image_attachments::pick_images,
                 runtime::image_attachments::paste_image,
                 runtime::image_attachments::read_image_attachment,
+                runtime::media_generation::load_media_settings,
+                runtime::media_generation::save_media_settings,
+                runtime::media_generation::list_media_jobs,
+                runtime::media_generation::generate_image,
+                runtime::media_generation::create_video,
+                runtime::media_generation::refresh_video,
+                runtime::media_generation::cancel_video,
+                runtime::media_generation::inspect_media_asset,
+                runtime::media_generation::read_media_asset,
+                runtime::media_generation::read_media_image_data_url,
+                runtime::media_generation::media_asset_as_attachment,
                 runtime::browser::browser_command,
                 runtime::browser::browser_status,
                 runtime::browser::browser_viewport,

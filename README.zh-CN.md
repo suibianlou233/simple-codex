@@ -2,7 +2,7 @@
 
 **一个基于固定版本 Codex 执行内核、开源且本地优先的 Windows 桌面 AI 编程助手。**
 
-简体中文 · [English](README.md) · [下载 Windows 版本](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.1-rc.2) · [反馈问题](https://github.com/suibianlou233/simple-codex/issues)
+简体中文 · [English](README.md) · [下载 Windows 版本](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.1-rc.3) · [反馈问题](https://github.com/suibianlou233/simple-codex/issues)
 
 非常感谢 OpenAI 开源了 Codex 的代码，让我有机会学习它的架构，并基于这些开源成果继续开发 Simple Codex。
 
@@ -12,7 +12,7 @@ Simple Codex 在 Codex 执行内核外，提供桌面界面、本地控制层和
 
 ## 下载与开始使用
 
-1. 下载 [0.1.1 Windows 安装包 ZIP](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.1-rc.2)，不要下载 GitHub 自动生成的源码压缩包。
+1. 下载 [0.1.1 Windows 安装包 ZIP](https://github.com/suibianlou233/simple-codex/releases/tag/v0.1.1-rc.3)，不要下载 GitHub 自动生成的源码压缩包。
 2. 解压后运行安装程序。需要 Windows 10/11 x64，以及已安装的 Microsoft Edge WebView2 Evergreen Runtime；安装包不会自动下载 WebView2。
 3. 启动 Simple，首次使用引导会带你进入模型设置。填写接口地址、模型名称和 API Key，保存即可。
 4. 点击左侧“打开项目”，选择本地文件夹。建议从一个小型只读任务开始，先使用需要审批的权限级别。
@@ -32,7 +32,8 @@ Simple Codex 在 Codex 执行内核外，提供桌面界面、本地控制层和
 - **桌面开发流程**：打开本地项目、管理对话、流式回复、停止生成、搜索任务及保存会话历史。
 - **代码与命令工具**：通过内核和 Simple 权限控制读取项目、修改文件、执行终端命令。
 - **右侧工作区**：内置浏览器和真实交互终端，拖动左边框调宽；文件与 Diff 面板入口已移除。执行记录按操作类型折叠展示，最终回答单独保留。
-- **Simple Code**：顶部切换轻量 IDE，提供项目目录、代码编辑器与保存冲突提示，右侧保留 AI、终端和浏览器。
+- **Simple Code**：顶部切换轻量 IDE，提供项目目录、代码编辑器与保存冲突提示，右侧保留 AI、终端和浏览器入口。
+- **对话内媒体生成**：使用用户自己的火山方舟 API Key 调用 Seedream 与 Seedance；直接说“画一张……”或“生成一段视频……”，结果以内嵌图片或视频播放器出现在当前对话，并下载到项目隔离的本地媒体目录。
 - **中文交流**：每次模型请求都要求进度、恢复说明和最终回复使用简体中文，代码和原始报错保留。
 - **技能管理**：设置中导入本机技能或技能文件夹，查看说明、更新与启停；跨模型配置共用本地技能库，依赖待适配的技能会显示提示。
 - **模型配置**：包含 DeepSeek、通义千问和 OpenAI 兼容 API 适配，模型密钥保存在操作系统凭据库中。
@@ -85,3 +86,7 @@ Simple Codex 使用 [Apache-2.0](LICENSE) 协议。复用组件保留各自适�
 ## 0.1.1 更新
 
 支持图片拖拽、粘贴与预览，DeepSeek 图片请求自动使用视觉模型。内置浏览器和真实 PowerShell 终端共用可拖拽调宽的右侧栏，切换任务或浏览器保留终端会话。文件和 Diff 面板入口已移除。固定内核未修改。150 项前端测试、发布构建、启动及包内校验通过；图片/浏览器真实模型完整流程与干净机器安装仍待验收。
+
+## 当前开发版新增
+
+新增内置 `generate-media` 技能和 `simple_media` 本地工具、系统凭据库配置、项目隔离媒体仓库、视频任务轮询以及对话内图片/视频渲染。付费请求只响应用户在当前消息中的明确生成意图，提交结果不确定时不会自动重试。真实付费接口与账单仍需使用者用自己的凭据完成低规格验收。详见 [媒体生成说明](docs/MEDIA-GENERATION.md)。

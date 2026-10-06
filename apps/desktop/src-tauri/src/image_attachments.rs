@@ -96,7 +96,11 @@ pub(super) fn save(
     })
 }
 
-fn read(database: &Path, project: &Path, reference: &str) -> Result<Vec<u8>, DesktopError> {
+pub(super) fn read(
+    database: &Path,
+    project: &Path,
+    reference: &str,
+) -> Result<Vec<u8>, DesktopError> {
     let id = image_id(reference)?;
     let root = fs::canonicalize(directory(database, project)?)?;
     let path = fs::canonicalize(root.join(id))?;

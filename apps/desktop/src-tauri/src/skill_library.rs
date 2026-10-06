@@ -53,6 +53,35 @@ fn library_root(app: &AppHandle) -> Result<PathBuf, String> {
     fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     Ok(root)
 }
+
+fn builtin_media_skill_root(app: &AppHandle) -> Result<PathBuf, String> {
+    let resources = app.path().resource_dir().map_err(|error| error.to_string())?;
+    let bundled = resources
+        .join("simple-resources")
+        .join("skills")
+        .join("generate-media");
+    let mut candidates = vec![bundled];
+    if cfg!(debug_assertions) {
+        candidates.push(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("resources/simple-resources/skills/generate-media"),
+        );
+    }
+    for root in candidates {
+        let document = root.join("SKILL.md");
+        if !document.is_file() {
+            continue;
+        }
+        let text = String::from_utf8(bounded_read(&document, 4 * 1024 * 1024)?)
+            .map_err(|_| "内置媒体技能不是 UTF-8")?;
+        let (name, _) = metadata(&text)?;
+        if name != "generate-media" {
+            return Err("内置媒体技能名称无效".into());
+        }
+        return Ok(root);
+    }
+    Err("缺少内置图片与视频生成技能".into())
+}
 fn check_ancestors(path: &Path) -> Result<(), String> {
     for part in path.ancestors() {
         let meta = match fs::symlink_metadata(part) {
@@ -407,7 +436,7 @@ pub(crate) async fn apply_to_kernel(
         let _guard = state.0.lock().map_err(|_| DesktopError::StateUnavailable)?;
         let root = library_root(app).map_err(DesktopError::SkillLibrary)?;
         let library = read_library(&root).map_err(DesktopError::SkillLibrary)?;
-        let mut roots = Vec::new();
+        let mut roots = vec![builtin_media_skill_root(app).map_err(DesktopError::SkillLibrary)?];
         for entry in library.entries.iter().filter(|e| e.enabled) {
             let path = root.join("packages").join(&entry.revision);
             check_ancestors(&path).map_err(|_| DesktopError::StateUnavailable)?;

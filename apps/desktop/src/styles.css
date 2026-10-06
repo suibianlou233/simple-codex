@@ -288,7 +288,7 @@ button:disabled { cursor:not-allowed; }
 .create-heading h2 { margin: 4px 0 0; font-size: 22px; letter-spacing: -0.025em; }
 .text-button { color: var(--text-secondary); font-size: 12px; }
 .model-modal label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 12px; font-weight: 650; }
-.model-modal input {
+.model-modal input, .model-modal select {
   min-height: 40px;
   padding: 0 11px;
   border: 1px solid var(--border);
@@ -297,7 +297,7 @@ button:disabled { cursor:not-allowed; }
   background: var(--surface-subtle);
   font-size: 12px;
 }
-.model-modal input:focus { border-color: var(--accent); background: var(--surface-raised); }
+.model-modal input:focus, .model-modal select:focus { border-color: var(--accent); background: var(--surface-raised); }
 .preset-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
 .preset-row button, .settings-button {
   padding: 8px;

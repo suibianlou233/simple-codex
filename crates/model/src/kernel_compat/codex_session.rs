@@ -509,6 +509,7 @@ mod tests {
         assert_eq!(calls.len(), 5);
         assert_eq!(calls[0].0, "thread/start");
         assert_eq!(calls[0].1["dynamicTools"][0]["name"], "simple_browser");
+        assert_eq!(calls[0].1["dynamicTools"][1]["name"], "simple_media");
         assert_eq!(calls[0].1["config"]["web_search"], "disabled");
         assert_eq!(calls[0].1["config"]["model_context_window"], 32000);
         assert_eq!(calls[0].1["approvalPolicy"], "on-request");

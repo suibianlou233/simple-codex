@@ -154,7 +154,9 @@ fn checked_database_path(
     reject_link(&path)?;
     let canonical_root = std::fs::canonicalize(root)?;
     let canonical_home = std::fs::canonicalize(&path)?;
-    if canonical_home.parent() != Some(canonical_root.as_path()) || !canonical_home.is_dir() {
+    if !canonical_home.is_dir()
+        || !managed_parent_matches(&canonical_root, canonical_home.parent())
+    {
         return Err(StorageError::NativeHistory("历史目录越界或不是文件夹"));
     }
     let database = canonical_home.join(database_name);
@@ -163,6 +165,60 @@ fn checked_database_path(
     }
     reject_link(&database)?;
     Ok(Some(database))
+}
+
+fn managed_parent_matches(
+    canonical_root: &Path,
+    canonical_parent: Option<&Path>,
+) -> bool {
+    let Some(canonical_parent) = canonical_parent else {
+        return false;
+    };
+    if canonical_parent == canonical_root {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        let Some(local_data) = dirs::data_local_dir() else {
+            return false;
+        };
+        let Ok(local_data) = std::fs::canonicalize(local_data) else {
+            return false;
+        };
+        windows_store_redirect_matches(canonical_root, canonical_parent, &local_data)
+    }
+    #[cfg(not(windows))]
+    false
+}
+
+#[cfg(windows)]
+fn windows_store_redirect_matches(requested: &Path, canonical: &Path, local_data: &Path) -> bool {
+    let Ok(requested_relative) = requested.strip_prefix(local_data) else {
+        return false;
+    };
+    let Ok(canonical_relative) = canonical.strip_prefix(local_data) else {
+        return false;
+    };
+    let requested = requested_relative.iter().collect::<Vec<_>>();
+    let canonical = canonical_relative.iter().collect::<Vec<_>>();
+    if canonical.len() != requested.len() + 4
+        || !canonical[0]
+            .to_string_lossy()
+            .eq_ignore_ascii_case("Packages")
+        || canonical[1].is_empty()
+        || !canonical[2]
+            .to_string_lossy()
+            .eq_ignore_ascii_case("LocalCache")
+        || !canonical[3]
+            .to_string_lossy()
+            .eq_ignore_ascii_case("Local")
+    {
+        return false;
+    }
+    canonical[4..].iter().zip(requested).all(|(left, right)| {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    })
 }
 
 fn reject_link(path: &Path) -> Result<(), StorageError> {

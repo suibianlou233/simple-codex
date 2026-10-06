@@ -6,6 +6,7 @@ import {
   Composer,
   EmptyWorkspace,
   ModelSettings,
+  MarkdownMessage,
   PermissionSelector,
   permissionForNextConversation,
   summarizeWorkProcess,
@@ -104,7 +105,7 @@ describe("toMessage", () => {
     expect(markup).toContain("当前为深色主题，切换到浅色主题");
   });
 
-  it("renders only terminal and browser workspace controls", () => {
+  it("keeps media generation in conversation instead of a separate workspace mode", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceNavigation, {
         browserOpen: true,
@@ -120,9 +121,20 @@ describe("toMessage", () => {
     expect(markup).not.toContain("Diff");
     expect(markup).not.toContain(">Review<");
     expect(markup).toContain("终端");
+    expect(markup).not.toContain("创作");
     const diffButton = markup.match(/<button[^>]*aria-label="浏览器"[^>]*>/)?.[0];
     expect(diffButton).toContain('class="is-active"');
     expect(diffButton).toContain('aria-pressed="true"');
+  });
+
+  it("renders opaque generated image and video references inside assistant messages", () => {
+    const reference = `simple-media:${"a".repeat(64)}`;
+    const image = renderToStaticMarkup(createElement(MarkdownMessage, { content: `![生成图片](${reference})` }));
+    const video = renderToStaticMarkup(createElement(MarkdownMessage, { content: `[生成视频](${reference})` }));
+    expect(image).toContain("正在加载媒体");
+    expect(image).toContain("生成图片");
+    expect(video).toContain("正在加载媒体");
+    expect(video).toContain("生成视频");
   });
 
   it("shows a chat-first welcome without a title or goal form", () => {

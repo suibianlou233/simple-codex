@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {frontendLicenseSupplement} from './frontend-license-supplements.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import { builtinModules, createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,11 +62,15 @@ if (process.argv[2]) {
 }
 
 const visited = new Set();
+const nodeBuiltins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]));
 function visit(packageFile) {
   const pkg = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
   const require = createRequire(packageFile);
   for (const name of Object.keys(pkg.dependencies ?? {}).sort()) {
-    const resolved = require.resolve.paths(name).map(p => path.join(p, name, 'package.json')).find(p => fs.existsSync(p));
+    if (nodeBuiltins.has(name)) continue;
+    const searchPaths = require.resolve.paths(name);
+    if (!searchPaths) throw new Error(`Cannot resolve dependency search paths for ${name} from ${packageFile}`);
+    const resolved = searchPaths.map(p => path.join(p, name, 'package.json')).find(p => fs.existsSync(p));
     if (!resolved) throw new Error(`Missing installed production dependency: ${name}`);
     const real = fs.realpathSync(resolved);
     if (visited.has(real)) continue;

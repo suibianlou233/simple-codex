@@ -11,6 +11,7 @@ name = "local_agent_storage"
 path = "src/lib.rs"
 
 [dependencies]
+dirs = "=6.0.0"
 rusqlite = { version = "0.32.1", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true

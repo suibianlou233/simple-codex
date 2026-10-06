@@ -80,6 +80,8 @@ mod memory_control;
 pub(crate) mod memory_notes;
 #[path = "memory_view.rs"]
 mod memory_view;
+#[path = "media_generation.rs"]
+pub(crate) mod media_generation;
 #[path = "project_execution.rs"]
 mod project_execution;
 #[path = "project_lease.rs"]
@@ -5575,15 +5577,42 @@ async fn consume_codex_events(
                 }
             }
             CodexKernelEvent::OtherRequest { id, method, params } if method == "item/tool/call" => {
-                // Never hold the event gate while a browser approval is pending:
+                // Never hold the event gate while a desktop tool is pending:
                 // native completion and stop must keep flowing independently.
-                tauri::async_runtime::spawn(browser::handle_tool(
-                    app.clone(),
-                    Arc::clone(&runtime),
-                    client.clone(),
-                    id,
-                    params,
-                ));
+                match params["tool"].as_str() {
+                    Some("simple_browser") => {
+                        tauri::async_runtime::spawn(browser::handle_tool(
+                            app.clone(),
+                            Arc::clone(&runtime),
+                            client.clone(),
+                            id,
+                            params,
+                        ));
+                    }
+                    Some("simple_media") => {
+                        tauri::async_runtime::spawn(media_generation::handle_tool(
+                            app.clone(),
+                            Arc::clone(&runtime),
+                            client.clone(),
+                            id,
+                            params,
+                        ));
+                    }
+                    _ => {
+                        if let Err(error) = client
+                            .respond_error(
+                                id,
+                                json!({
+                                    "code": -32601,
+                                    "message": "Simple 不支持这个动态工具"
+                                }),
+                            )
+                            .await
+                        {
+                            break error.to_string();
+                        }
+                    }
+                }
             }
             CodexKernelEvent::OtherRequest { id, method, .. } => {
                 crate::logging::warn(

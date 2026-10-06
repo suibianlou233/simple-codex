@@ -2,6 +2,7 @@ import { Children, isValidElement, useContext, type ReactNode } from "react";
 import { FileOpenContext } from "../code/FileOpenContext";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import { StoredImage } from "../components/StoredImage";
+import { StoredMedia } from "../components/StoredMedia";
 import remarkGfm from "remark-gfm";
 import { CopyButton } from "../components/CopyButton";
 
@@ -17,11 +18,11 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 
 export function MarkdownMessage({ content }: { content: string }) {
   const openFile = useContext(FileOpenContext);
-  return <div className="markdown-message"><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={url => /^simple-image:[a-f0-9]{64}$/.test(url) || /^[a-z]:[\\/]/i.test(url) ? url : defaultUrlTransform(url)} components={{
-    img: ({ src, alt }) => typeof src === "string" && /^simple-image:[a-f0-9]{64}$/.test(src) ? <StoredImage reference={src} name={alt ?? "图片"} /> : <span>{alt ?? "图片"}</span>,
+  return <div className="markdown-message"><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={url => /^(?:simple-image|simple-media):[a-f0-9]{64}$/.test(url) || /^[a-z]:[\\/]/i.test(url) ? url : defaultUrlTransform(url)} components={{
+    img: ({ src, alt }) => typeof src === "string" && /^simple-image:[a-f0-9]{64}$/.test(src) ? <StoredImage reference={src} name={alt ?? "图片"} /> : typeof src === "string" && /^simple-media:[a-f0-9]{64}$/.test(src) ? <StoredMedia reference={src} name={alt ?? "生成图片"} expectedKind="image" /> : <span>{alt ?? "图片"}</span>,
     // Opening external destinations remains a bridge/product decision; never
     // turn model-generated paths into unrestricted browser navigation.
-    a: ({ children, href }) => openFile && href && !/^(https?:|mailto:|#|\/\/)/i.test(href) ? <button className="markdown-link code-file-link" title={href} onClick={()=>openFile(href)}>{children}</button> : <span className="markdown-link" title={href}>{children}</span>,
+    a: ({ children, href }) => href && /^simple-media:[a-f0-9]{64}$/.test(href) ? <StoredMedia reference={href} name={codeText(children) || "生成视频"} /> : openFile && href && !/^(https?:|mailto:|#|\/\/)/i.test(href) ? <button className="markdown-link code-file-link" title={href} onClick={()=>openFile(href)}>{children}</button> : <span className="markdown-link" title={href}>{children}</span>,
     pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   }}>{content}</ReactMarkdown></div>;
 }

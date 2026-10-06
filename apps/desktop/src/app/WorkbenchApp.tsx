@@ -24,6 +24,7 @@ import { EmptyWorkspace } from "../components/Welcome";
 import { AgentSettings } from "../settings/AgentSettings";
 import { SkillManager } from "../settings/SkillManager";
 import { ModelSettings } from "../settings/ModelSettings";
+import { MediaConnectionSettings } from "../settings/MediaConnectionSettings";
 import { FirstRunGuide } from "../components/FirstRunGuide";
 import { markGuideSeen, shouldShowGuide } from "./onboarding";
 import { toMessage } from "./feedback";
@@ -103,6 +104,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
   const [isBusy, setIsBusy] = useState(false);
   const [isSkillsOpen, setIsSkillsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMediaSettingsOpen, setIsMediaSettingsOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(shouldShowGuide);
   const closeGuide = () => { markGuideSeen(); setIsGuideOpen(false); };
   const [isAgentSettingsOpen, setIsAgentSettingsOpen] = useState(false);
@@ -251,7 +253,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || (event.target instanceof Element && event.target.closest(".code-workspace"))) return;
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || isSettingsOpen || isSkillsOpen || isAgentSettingsOpen || isGuideOpen) return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || isSettingsOpen || isMediaSettingsOpen || isSkillsOpen || isAgentSettingsOpen || isGuideOpen) return;
       if (event.key.toLowerCase() === "k") { event.preventDefault(); setSearchOpen((open) => !open); }
       if (event.key.toLowerCase() === "b") { event.preventDefault(); setSidebarCollapsed((collapsed) => !collapsed); }
       if (event.key.toLowerCase() === "n") { event.preventDefault(); beginNewConversation(); }
@@ -538,7 +540,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
           <pre tabIndex={0} aria-label="正文全文">{textDocument.text}</pre>
         </section> : null}
         {activeProject && browserOpen ? <BrowserPanel key={activeProject.id} projectId={activeProject.id}
-          suspended={isSettingsOpen || isGuideOpen || isSkillsOpen || isAgentSettingsOpen || searchOpen || browserApprovalOpen || resizingPanel || editorModalOpen}
+          suspended={isSettingsOpen || isMediaSettingsOpen || isGuideOpen || isSkillsOpen || isAgentSettingsOpen || searchOpen || browserApprovalOpen || resizingPanel || editorModalOpen}
           onClose={()=>setBrowserOpen(false)}
           onAttach={attachment => setAttachments(current => current.some(item => item.path === attachment.path) ? current : [...current, attachment])} /> : null}
         {terminalTasks.map(taskId => <div key={taskId} className="terminal-slot" hidden={!terminalOpen || taskId !== activeTask?.id}>
@@ -550,6 +552,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
       {isSettingsOpen ? (
         <ModelSettings
           onManageSkills={() => { setIsSettingsOpen(false); setIsSkillsOpen(true); }}
+          onManageMedia={() => { setIsSettingsOpen(false); setIsMediaSettingsOpen(true); }}
           onShowGuide={() => { setSendAfterConfiguration(false); setIsSettingsOpen(false); setIsGuideOpen(true); }}
           activeProfile={activeModel}
           contextUsage={activeContextUsage}
@@ -580,6 +583,7 @@ export function App({ bridge = desktopBridge }: AppProps) {
           }}
         />
       ) : null}
+      {isMediaSettingsOpen ? <MediaConnectionSettings onClose={() => setIsMediaSettingsOpen(false)} /> : null}
       {isSkillsOpen && <SkillManager onClose={() => setIsSkillsOpen(false)} />}
       {isAgentSettingsOpen && activeTask ? (
         <AgentSettings

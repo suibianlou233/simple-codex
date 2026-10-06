@@ -46,10 +46,14 @@ $sourceFiles = @(
     'apps/desktop/src/app/attachmentDraft.ts',
     'apps/desktop/src-tauri/src/browser_actions.js',
     'apps/desktop/src-tauri/src/image_attachments.rs',
+    'apps/desktop/src-tauri/src/media_generation.rs',
+    'apps/desktop/src-tauri/src/skill_library.rs',
     'apps/desktop/src-tauri/src/memory_notes.rs',
     'apps/desktop/src/bridge/mediaBridge.ts',
+    'apps/desktop/src/bridge/mediaGenerationBridge.ts',
     'apps/desktop/src/components/Composer.tsx',
     'apps/desktop/src/components/StoredImage.tsx',
+    'apps/desktop/src/components/StoredMedia.tsx',
     'apps/desktop/src/items/MarkdownMessage.tsx',
     'apps/desktop/src/panels/BrowserPanel.tsx',
     'crates/model/src/responses_gateway.rs',
@@ -64,6 +68,7 @@ $sourceFiles = @(
     'crates/model/src/kernel_compat/history_layout.rs',
     'crates/model/src/kernel_compat/package.rs',
     'crates/storage/src/native_history.rs',
+    'apps/desktop/src-tauri/resources/simple-resources/skills/generate-media/SKILL.md',
     'apps/desktop/src/styles.css', 'apps/desktop/src/design/workbench.css',
     'packaging/README-release.md'
 )

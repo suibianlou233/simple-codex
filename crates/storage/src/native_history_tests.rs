@@ -226,6 +226,35 @@ fn discovery_rejects_junctions_to_other_history_directories() {
     assert!(outside.exists());
 }
 
+#[cfg(windows)]
+#[test]
+fn windows_store_local_cache_redirect_is_the_only_accepted_history_parent_alias() {
+    let local = Path::new(r"\\?\C:\Users\fixture\AppData\Local");
+    let requested = local.join(r"dev.localagent.desktop\codex-kernel");
+    let redirected = local.join(
+        r"Packages\OpenAI.Codex_fixture\LocalCache\Local\dev.localagent.desktop\codex-kernel",
+    );
+    assert!(windows_store_redirect_matches(
+        &requested,
+        &redirected,
+        local
+    ));
+    assert!(!windows_store_redirect_matches(
+        &requested,
+        &local.join(
+            r"Packages\OpenAI.Codex_fixture\LocalCache\Roaming\dev.localagent.desktop\codex-kernel"
+        ),
+        local
+    ));
+    assert!(!windows_store_redirect_matches(
+        &requested,
+        &local.join(
+            r"Packages\OpenAI.Codex_fixture\LocalCache\Local\different-product\codex-kernel"
+        ),
+        local
+    ));
+}
+
 #[test]
 fn version_supplied_history_layout_and_invalid_filename() {
     let temp = tempfile::tempdir().expect("fixture");

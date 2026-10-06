@@ -14,6 +14,7 @@ export function ModelSettings({
   onSave,
   onShowGuide,
   onManageSkills,
+  onManageMedia,
 }: {
   activeProfile?: ModelProfileSummary;
   contextUsage?: ContextUsage;
@@ -22,6 +23,7 @@ export function ModelSettings({
   onSave: (input: SaveModelProfileInput) => Promise<void>;
   onShowGuide?: () => void;
   onManageSkills?: () => void;
+  onManageMedia?: () => void;
 }) {
   const dialogRef = useDialog<HTMLFormElement>(onClose);
   const [dialect, setDialect] = useState<SaveModelProfileInput["dialect"]>(
@@ -212,6 +214,7 @@ export function ModelSettings({
           <span aria-hidden="true">→</span>
         </button>
         {onManageSkills && <button className="text-button" type="button" onClick={onManageSkills}>技能管理</button>}
+        {onManageMedia && <button className="text-button" type="button" onClick={onManageMedia}>图片与视频设置</button>}
         {onShowGuide ? <button className="text-button" type="button" disabled={disabled} onClick={onShowGuide}>查看使用引导</button> : null}
       </form>
     </div>

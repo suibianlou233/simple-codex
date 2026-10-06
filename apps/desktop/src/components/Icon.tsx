@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-export type IconName = "text" | "archive" | "restore" | "trash" | "sidebar" | "plus" | "search" | "folder" | "chat" | "chevron" | "settings" | "terminal" | "diff" | "review" | "close" | "arrow" | "paperclip" | "image" | "globe" | "code" | "check" | "copy" | "spark" | "more";
+export type IconName = "text" | "archive" | "restore" | "trash" | "sidebar" | "plus" | "search" | "folder" | "chat" | "chevron" | "settings" | "terminal" | "diff" | "review" | "close" | "arrow" | "paperclip" | "image" | "video" | "globe" | "code" | "check" | "copy" | "spark" | "more";
 const paths: Record<IconName, string> = {
   text: "M6 3h9l4 4v14H6z M14 3v5h5 M9 12h7 M9 16h5",
   archive: "M4 4h16v4H4z M5 8v12h14V8 M9 12h6",
@@ -21,6 +21,7 @@ const paths: Record<IconName, string> = {
   paperclip: "m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L13 2 M5 16l10-10",
   globe: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M12 3c-5 5-5 13 0 18 M12 3c5 5 5 13 0 18",
   image: "M4 4h16v16H4z M4 16l5-5 4 4 3-3 4 4 M15 8h.01",
+  video: "M3 6h13v12H3z M16 10l5-3v10l-5-3z",
   code: "m8 6-6 6 6 6 M16 6l6 6-6 6 M14 3l-4 18",
   check: "m5 12 4 4L19 6",
   copy: "M8 8h13v13H8z M16 8V3H3v13h5",

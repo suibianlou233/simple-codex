@@ -3,11 +3,20 @@ param([switch]$Offline, [string]$KernelSource, [ValidateRange(1, 64)][int]$Jobs 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $desktopPath = Join-Path $projectRoot 'apps/desktop'
+$mediaSkill = Join-Path $desktopPath 'src-tauri/resources/simple-resources/skills/generate-media/SKILL.md'
+$releaseConfig = Join-Path $desktopPath 'src-tauri/tauri.release.json'
 $originalTemp = $env:TEMP
 $originalTmp = $env:TMP
 $originalOffline = $env:CARGO_NET_OFFLINE
 $originalJobs = $env:CARGO_BUILD_JOBS
 try {
+    if (-not (Test-Path -LiteralPath $mediaSkill -PathType Leaf)) {
+        throw "Bundled media skill is missing: $mediaSkill"
+    }
+    $releaseConfigText = Get-Content -Raw -LiteralPath $releaseConfig
+    if (-not $releaseConfigText.Contains('simple-resources/skills/generate-media/SKILL.md')) {
+        throw 'Release resources do not include the bundled generate-media skill.'
+    }
     $buildTemp = Join-Path $projectRoot 'target/tmp'
     New-Item -ItemType Directory -Path $buildTemp -Force | Out-Null
     $env:TEMP = $buildTemp

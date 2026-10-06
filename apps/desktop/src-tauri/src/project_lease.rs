@@ -60,9 +60,10 @@ impl ProjectLease {
             options.share_mode(3).custom_flags(0x00200000);
         }
         let file = options.open(&path)?;
+        let canonical_path = fs::canonicalize(&path)?;
         if !file.metadata()?.is_file()
             || fs::symlink_metadata(&path)?.file_type().is_symlink()
-            || fs::canonicalize(&path)? != path
+            || !lock_path_matches(&path, &canonical_path)
         {
             return Err(DesktopError::InvalidStoredPath);
         }
@@ -72,6 +73,50 @@ impl ProjectLease {
             Err(fs::TryLockError::Error(error)) => Err(error.into()),
         }
     }
+}
+
+fn lock_path_matches(requested: &Path, canonical: &Path) -> bool {
+    if requested == canonical {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        let Some(local_data) = dirs::data_local_dir() else {
+            return false;
+        };
+        let Ok(local_data) = fs::canonicalize(local_data) else {
+            return false;
+        };
+        windows_store_redirect_matches(requested, canonical, &local_data)
+    }
+    #[cfg(not(windows))]
+    false
+}
+
+#[cfg(windows)]
+fn windows_store_redirect_matches(requested: &Path, canonical: &Path, local_data: &Path) -> bool {
+    let Ok(requested_relative) = requested.strip_prefix(local_data) else {
+        return false;
+    };
+    let Ok(canonical_relative) = canonical.strip_prefix(local_data) else {
+        return false;
+    };
+    let requested = requested_relative.iter().collect::<Vec<_>>();
+    let canonical = canonical_relative.iter().collect::<Vec<_>>();
+    if canonical.len() != requested.len() + 4
+        || !canonical[0].to_string_lossy().eq_ignore_ascii_case("Packages")
+        || canonical[1].is_empty()
+        || !canonical[2]
+            .to_string_lossy()
+            .eq_ignore_ascii_case("LocalCache")
+        || !canonical[3].to_string_lossy().eq_ignore_ascii_case("Local")
+    {
+        return false;
+    }
+    canonical[4..].iter().zip(requested).all(|(left, right)| {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    })
 }
 
 #[cfg(test)]
@@ -205,6 +250,35 @@ mod tests {
         std::io::stdin()
             .read_line(&mut line)
             .expect("wait for parent");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_store_local_cache_redirect_is_the_only_accepted_alias() {
+        let local = Path::new(r"\\?\C:\Users\fixture\AppData\Local");
+        let requested = local.join(r"simple-coordination\review-locks\project-a.lock");
+        let redirected = local.join(
+            r"Packages\OpenAI.Codex_fixture\LocalCache\Local\simple-coordination\review-locks\project-a.lock",
+        );
+        assert!(windows_store_redirect_matches(
+            &requested,
+            &redirected,
+            local
+        ));
+        assert!(!windows_store_redirect_matches(
+            &requested,
+            &local.join(
+                r"Packages\OpenAI.Codex_fixture\LocalCache\Roaming\simple-coordination\review-locks\project-a.lock"
+            ),
+            local
+        ));
+        assert!(!windows_store_redirect_matches(
+            &requested,
+            &local.join(
+                r"Packages\OpenAI.Codex_fixture\LocalCache\Local\simple-coordination\review-locks\project-b.lock"
+            ),
+            local
+        ));
     }
 
     #[test]
